@@ -5,7 +5,7 @@ const videoSchema = new mongoose.Schema(
         uploader: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "channel",
-            required: true
+            // required: true
         },
         title: {
             type: String,
@@ -16,7 +16,7 @@ const videoSchema = new mongoose.Schema(
             required: true
         },
         url: {
-            type: String,
+            type: [String],
             required: true
         },
         thumbnail: {
@@ -24,7 +24,8 @@ const videoSchema = new mongoose.Schema(
             required: true
         },
         category: {
-            type: [String] // Danh mục video (mảng)
+            type: [String], // Danh mục video (mảng)
+            required: true
         },
         views: {
             type: Number,

@@ -18,7 +18,7 @@ const googleAuth = async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "Strict",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
+    maxAge: 24 * 60 * 60 * 1000,  // 1 ngày
   });
 
   res.redirect(`${process.env.URL_CLIENT}/${req.user.email}/profile`);
@@ -31,15 +31,21 @@ const loginSuccess = async (req, res) => {
       return res.status(401).json({ error: "No authentication token found" });
     }
 
-    // Giải mã token để lấy userId
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expired. Please log in again.' });
+      }
+      throw err;
+    }
+
     const user = await User.findById(decoded.id).populate("channel"); // Lấy thông tin channel
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-
-    // console.log("ABC:", user);
 
     res.json({
       token,
