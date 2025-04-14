@@ -116,7 +116,7 @@ const downloadVideoPart = asyncHandler(async (req, res) => {
 });
 
 const createVideo = asyncHandler(async (req, res, next) => {
-  const { thumbnailUrl, videoUrls, title, description, categories, channelId } = req.body;
+  const { thumbnailUrl, videoUrls, title, description, categories, channelId, duration } = req.body;
 
   // Kiểm tra hợp lệ
   if (!thumbnailUrl || !Array.isArray(videoUrls) || videoUrls.length === 0) {
@@ -130,7 +130,8 @@ const createVideo = asyncHandler(async (req, res, next) => {
       url: videoUrls,
       title,
       description,
-      categories,
+      duration,
+      category: categories,
       createdAt: new Date(),
     });
 
