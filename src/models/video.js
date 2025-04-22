@@ -4,7 +4,7 @@ const videoSchema = new mongoose.Schema(
     {
         uploader: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "channel",
+            ref: "Channel",
             // required: true
         },
         title: {
@@ -39,7 +39,7 @@ const videoSchema = new mongoose.Schema(
                 },
                 postedBy: {
                     type: mongoose.Schema.Types.ObjectId,
-                    ref: "channel"
+                    ref: "Channel"
                 }
             }
         ],

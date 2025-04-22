@@ -1,10 +1,13 @@
-// ""const jwt = require("jsonwebtoken");
+const axios = require("axios");
 const Video = require("../models/video");
+const Channel = require("../models/channel");
+const VideoViewHistory = require("../models/videoViewHistory");
 const cloudinary = require("cloudinary").v2;
 const asyncHandler = require("express-async-handler");
 const fs = require("fs").promises;
+const fsSync = require("fs");
 const path = require("path");
-const ffmpegPath = require('ffmpeg-static');
+const ffmpegPath = require("ffmpeg-static");
 const execPromise = require("../utils/videoUtils/execPromise");
 const getVideoDuration = require("../utils/videoUtils/getVideoDuration");
 
@@ -27,7 +30,9 @@ const getVideo = asyncHandler(async (req, res) => {
 
     // 👉 Tạo tên file duy nhất để lưu tạm
     const ext = path.extname(videoFile.name);
-    const uniqueFileName = `${path.parse(videoFile.name).name}_${uuidv4()}${ext}`;
+    const uniqueFileName = `${
+      path.parse(videoFile.name).name
+    }_${uuidv4()}${ext}`;
     const tempVideoPath = path.join(tempFolderPath, uniqueFileName);
 
     await videoFile.mv(tempVideoPath);
@@ -40,7 +45,9 @@ const getVideo = asyncHandler(async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Lỗi khi xử lý video upload:", err);
-    res.status(500).json({ message: "Lỗi server khi lưu video tạm", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Lỗi server khi lưu video tạm", error: err.message });
   }
 });
 
@@ -48,7 +55,9 @@ const getListVideoSliced = asyncHandler(async (req, res) => {
   const { folder, savedName } = req.body;
 
   if (!folder || !savedName) {
-    return res.status(400).json({ message: "Thiếu thông tin folder hoặc savedName" });
+    return res
+      .status(400)
+      .json({ message: "Thiếu thông tin folder hoặc savedName" });
   }
 
   const tempFolderPath = path.join(__dirname, "../uploads", folder);
@@ -73,7 +82,9 @@ const getListVideoSliced = asyncHandler(async (req, res) => {
   for (let i = 0; i < totalChunks; i++) {
     const startTime = i * chunkDuration;
     const roundedDuration = Math.round(chunkDuration);
-    const outputFileName = `${videoBaseName}_part_${i + 1}_${roundedDuration}s.mp4`;
+    const outputFileName = `${videoBaseName}_part_${
+      i + 1
+    }_${roundedDuration}s.mp4`;
     const outputPath = path.join(tempFolderPath, outputFileName);
 
     const ffmpegCommand = `"${ffmpegPath}" -i "${videoPath}" -ss ${startTime} -t ${chunkDuration} -c copy "${outputPath}"`;
@@ -86,14 +97,19 @@ const getListVideoSliced = asyncHandler(async (req, res) => {
         path: `/uploads/${folder}/${outputFileName}`,
       });
     } catch (err) {
-      return res.status(500).json({ message: `Lỗi khi cắt video tại part ${i + 1}`, error: err.message });
+      return res.status(500).json({
+        message: `Lỗi khi cắt video tại part ${i + 1}`,
+        error: err.message,
+      });
     }
   }
 
   try {
     await fs.unlink(videoPath);
   } catch (err) {
-    return res.status(500).json({ message: "Không thể xóa video gốc", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Không thể xóa video gốc", error: err.message });
   }
 
   res.json({
@@ -116,7 +132,15 @@ const downloadVideoPart = asyncHandler(async (req, res) => {
 });
 
 const createVideo = asyncHandler(async (req, res, next) => {
-  const { thumbnailUrl, videoUrls, title, description, categories, channelId, duration } = req.body;
+  const {
+    thumbnailUrl,
+    videoUrls,
+    title,
+    description,
+    categories,
+    channelId,
+    duration,
+  } = req.body;
 
   // Kiểm tra hợp lệ
   if (!thumbnailUrl || !Array.isArray(videoUrls) || videoUrls.length === 0) {
@@ -223,8 +247,327 @@ const cleanupFolder = asyncHandler(async (req, res) => {
     res.status(200).json({ message: "Dọn dẹp folder thành công" });
   } catch (err) {
     console.warn("Lỗi khi dọn dẹp folder:", err);
-    res.status(500).json({ message: "Lỗi khi dọn dẹp folder", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Lỗi khi dọn dẹp folder", error: err.message });
   }
+});
+
+// GET video
+
+// Hàm lấy tất cả video từ cơ sở dữ liệu
+const getAllVideos = asyncHandler(async (req, res) => {
+  try {
+    const videos = await Video.find().populate(
+      "uploader",
+      "nameChannel avatarChannel"
+    );
+
+    if (videos.length === 0) {
+      return res.status(404).json({ message: "Không có video nào" });
+    }
+
+    res.status(200).json({
+      success: true,
+      videos,
+    });
+  } catch (err) {
+    console.error("Lỗi khi lấy danh sách video:", err);
+    res
+      .status(500)
+      .json({ message: "Lỗi server khi lấy video", error: err.message });
+  }
+});
+
+let inUse = {};
+const cleanupTimeouts = {};
+
+const getVideoInfo = asyncHandler(async (req, res) => {
+  try {
+    const video = await Video.findById(req.params.videoId).populate(
+      "uploader",
+      "nameChannel avatarChannel subscribers"
+    );
+
+    if (!video)
+      return res.status(404).json({ message: "Không tìm thấy video" });
+    res.json(video);
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+});
+
+const updateVideoView = asyncHandler(async (req, res) => {
+  const { videoId, channelId } = req.body;
+
+  if (!videoId || !channelId) {
+    return res.status(400).json({ message: "Thiếu videoId hoặc channelId" });
+  }
+
+  try {
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({ message: "Không tìm thấy video" });
+    }
+
+    const now = Date.now();
+    const THIRTY_SECONDS = 30 * 1000;
+
+    let viewHistory = await VideoViewHistory.findOne({ videoId, channelId });
+
+    if (viewHistory) {
+      const lastViewed = new Date(viewHistory.lastViewedAt).getTime();
+
+      if (now - lastViewed < THIRTY_SECONDS) {
+        // Người này đã xem video trong 30 giây qua => không tăng view
+        return res.status(200).json({ message: "Đã xem gần đây, không tăng view" });
+      }
+
+      // Cập nhật thời gian xem mới nhất
+      viewHistory.lastViewedAt = now;
+      await viewHistory.save();
+    } else {
+      // Nếu chưa có record, tạo mới
+      viewHistory = new VideoViewHistory({
+        videoId,
+        channelId,
+        lastViewedAt: now,
+      });
+      await viewHistory.save();
+    }
+
+    // Tăng view
+    video.views += 1;
+    await video.save();
+
+    res.status(200).json({ message: "Tăng view thành công", views: video.views });
+
+  } catch (error) {
+    console.error("❌ Lỗi khi cập nhật view:", error);
+    res.status(500).json({ message: "Lỗi server khi cập nhật view" });
+  }
+});
+
+const combineCloudVideosById = asyncHandler(async (req, res) => {
+  const { videoId } = req.body;
+  if (!videoId) return res.status(400).json({ message: "Thiếu videoId" });
+
+  try {
+    const videoData = await Video.findById(videoId);
+    if (!videoData || !Array.isArray(videoData.url)) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy video hoặc URL không hợp lệ" });
+    }
+
+    const timestamp = Date.now();
+    const folderName = `combine_${videoId}_${timestamp}`;
+    const tempFolder = path.join(__dirname, "../saves", folderName);
+    const listFilePath = path.join(tempFolder, "input.txt");
+    const outputFilePath = path.join(tempFolder, `combined_${videoId}.mp4`);
+
+    await fs.mkdir(tempFolder, { recursive: true });
+
+    const fileListContent = videoData.url
+      .map((url) => `file '${url}'`)
+      .join("\n");
+    await fs.writeFile(listFilePath, fileListContent);
+
+    const ffmpegCommand = `"${ffmpegPath}" -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls" -i "${listFilePath}" -c copy "${outputFilePath}"`;
+    await execPromise(ffmpegCommand);
+
+    if (!fsSync.existsSync(outputFilePath)) {
+      return res
+        .status(500)
+        .json({ message: "Tệp video chưa được tạo thành công." });
+    }
+
+    // ✅ Trả về đường dẫn tạm để FE gọi tiếp để stream
+    return res.status(200).json({
+      message: "Gộp video thành công",
+      videoPath: outputFilePath,
+      folderName,
+      fileName: `combined_${videoId}.mp4`,
+    });
+  } catch (err) {
+    console.error("❌ Lỗi khi nối video từ URL:", err);
+    res.status(500).json({ message: "Lỗi khi nối video", error: err.message });
+  }
+});
+
+const handleCleanup = async (videoPath) => {
+  try {
+    global.gc?.();
+
+    await fs.access(videoPath);
+
+    await new Promise((res) => setTimeout(res, 1000)); // Chờ 1s
+
+    await fs.rm(videoPath, { force: true });
+    console.log("🧹 Đã xoá file:", videoPath);
+
+    const folderPath = path.dirname(videoPath);
+    const files = await fs.readdir(folderPath);
+
+    const inputFilePath = path.join(folderPath, "input.txt");
+
+    try {
+      await fs.access(inputFilePath); // kiểm tra tồn tại
+      await fs.unlink(inputFilePath);
+      console.log("🧹 Đã xoá input.txt");
+
+      if (files.length === 0) {
+        try {
+          await fs.rmdir(folderPath);
+          console.log("🧹 Đã xoá thư mục:", folderPath);
+        } catch (err) {
+          console.warn("⚠️ Không thể xoá thư mục:", err.message);
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ Lỗi khi xoá input.txt hoặc thư mục:", err.message);
+    }
+  } catch (err) {
+    console.warn("⚠️ Lỗi khi xoá file:", err.message);
+  }
+
+  delete cleanupTimeouts[videoPath];
+};
+
+const videoStreaming = asyncHandler(async (req, res) => {
+  const { folderName, fileName } = req.query;
+  if (!folderName || !fileName) {
+    return res.status(400).json({ message: "Thiếu folderName hoặc fileName" });
+  }
+
+  const videoPath = path.join(__dirname, "../saves", folderName, fileName);
+
+  if (!fsSync.existsSync(videoPath)) {
+    return res.status(404).json({ message: "Không tìm thấy video" });
+  }
+
+  const stat = await fs.stat(videoPath);
+  const fileSize = stat.size;
+  const range = req.headers.range;
+
+  if (!range) {
+    const headers = {
+      "Content-Length": fileSize,
+      "Content-Type": "video/mp4",
+    };
+    res.writeHead(200, headers);
+    const stream = fsSync.createReadStream(videoPath);
+    stream.pipe(res);
+
+    req.on("abort", () => {
+      console.log("🚨 Video stream aborted by client for:", videoPath);
+      stream.destroy();
+      inUse[videoPath] = false;
+      cleanupTimeouts[videoPath] = setTimeout(async () => {
+        if (!inUse[videoPath]) {
+          handleCleanup(videoPath);
+        }
+      }, 30 * 1000);
+    });
+
+    stream.on("end", () => {
+      console.log("✅ Stream ended for:", videoPath);
+      inUse[videoPath] = false;
+
+      // Đảm bảo setTimeout không bị bỏ qua
+      if (!cleanupTimeouts[videoPath]) {
+        cleanupTimeouts[videoPath] = setTimeout(() => {
+          if (!inUse[videoPath]) {
+            handleCleanup(videoPath);
+          }
+        }, 15 * 1000); // Dọn sau 15s
+      }
+    });
+
+    res.on("close", () => {
+      console.log("📤 Response closed for:", videoPath);
+      stream.destroy();
+      inUse[videoPath] = false;
+
+      if (!cleanupTimeouts[videoPath]) {
+        cleanupTimeouts[videoPath] = setTimeout(() => {
+          if (!inUse[videoPath]) {
+            handleCleanup(videoPath);
+          }
+        }, 15 * 1000);
+      }
+    });
+
+    return;
+  }
+
+  const CHUNK_SIZE = 10 ** 6;
+  const parts = range.replace(/bytes=/, "").split("-");
+  const start = parseInt(parts[0], 10);
+  const end = parts[1]
+    ? parseInt(parts[1], 10)
+    : Math.min(start + CHUNK_SIZE - 1, fileSize - 1);
+
+  const contentLength = end - start + 1;
+
+  const headers = {
+    "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+    "Accept-Ranges": "bytes",
+    "Content-Length": contentLength,
+    "Content-Type": "video/mp4",
+  };
+
+  console.log(headers);
+
+  inUse[videoPath] = true;
+
+  if (cleanupTimeouts[videoPath]) {
+    clearTimeout(cleanupTimeouts[videoPath]);
+    delete cleanupTimeouts[videoPath];
+  }
+
+  res.writeHead(206, headers);
+  const stream = fsSync.createReadStream(videoPath, { start, end });
+  stream.pipe(res);
+
+  stream.on("end", () => {
+    console.log("✅ Stream ended for:", videoPath);
+    inUse[videoPath] = false;
+
+    // Đảm bảo setTimeout không bị bỏ qua
+    if (!cleanupTimeouts[videoPath]) {
+      cleanupTimeouts[videoPath] = setTimeout(() => {
+        if (!inUse[videoPath]) {
+          handleCleanup(videoPath);
+        }
+      }, 15 * 1000); // Dọn sau 15s
+    }
+  });
+
+  res.on("close", () => {
+    console.log("📤 Response closed for:", videoPath);
+    stream.destroy();
+    inUse[videoPath] = false;
+
+    if (!cleanupTimeouts[videoPath]) {
+      cleanupTimeouts[videoPath] = setTimeout(() => {
+        if (!inUse[videoPath]) {
+          handleCleanup(videoPath);
+        }
+      }, 15 * 1000);
+    }
+  });
+
+  req.on("abort", () => {
+    console.log("🚨 Video stream aborted by client for:", videoPath);
+    stream.destroy();
+    inUse[videoPath] = false;
+    cleanupTimeouts[videoPath] = setTimeout(async () => {
+      if (!inUse[videoPath]) {
+        handleCleanup(videoPath);
+      }
+    }, 30 * 1000);
+  });
 });
 
 module.exports = {
@@ -235,4 +578,10 @@ module.exports = {
   generateSignature,
   deleteSlicedVideos,
   cleanupFolder,
+
+  getAllVideos,
+  getVideoInfo,
+  updateVideoView,
+  combineCloudVideosById,
+  videoStreaming,
 };

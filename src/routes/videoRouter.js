@@ -6,6 +6,7 @@ const videoRouter = express.Router();
 
 const videoController = require("../controllers/videoController");
 
+// Upload Video 
 videoRouter.post("/get-video", videoController.getVideo);
 
 videoRouter.post("/get-list-video-sliced", videoController.getListVideoSliced);
@@ -19,5 +20,16 @@ videoRouter.post("/generate-signature", videoController.generateSignature);
 videoRouter.post("/delete-sliced-videos", videoController.deleteSlicedVideos);
 
 videoRouter.post("/cleanup-folder", videoController.cleanupFolder);
+
+// Get Video
+videoRouter.get("/get-all-videos", videoController.getAllVideos);
+
+videoRouter.get("/get-video-info/:videoId", videoController.getVideoInfo);
+
+videoRouter.post("/update-view", videoController.updateVideoView);
+
+videoRouter.post("/combine-video", videoController.combineCloudVideosById);
+
+videoRouter.get("/stream-video", videoController.videoStreaming);
 
 module.exports = videoRouter;
