@@ -5,7 +5,7 @@ const videoSchema = new mongoose.Schema(
         uploader: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Channel",
-            // required: true
+            required: true
         },
         title: {
             type: String,
@@ -58,9 +58,13 @@ const videoSchema = new mongoose.Schema(
         duration: {
             type: String
         },
-        createdAt: {
-            type: Date,
-            default: Date.now
+        commentTotal: {
+            type: Number,
+            default: 0
+        },
+        isPrivate: {
+            type: Boolean,
+            default: false
         }
     },
     { timestamps: true }

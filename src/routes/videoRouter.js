@@ -24,6 +24,10 @@ videoRouter.post("/cleanup-folder", videoController.cleanupFolder);
 // Get Video
 videoRouter.get("/get-all-videos", videoController.getAllVideos);
 
+videoRouter.get("/get-all-videos-of-channel/:channelId", videoController.getAllChannelVideos);
+
+videoRouter.get("/get-all-videos-of-user/:userId", videoController.getAllUserVideos);
+
 videoRouter.get("/get-video-info/:videoId", videoController.getVideoInfo);
 
 videoRouter.post("/update-view", videoController.updateVideoView);
@@ -31,5 +35,7 @@ videoRouter.post("/update-view", videoController.updateVideoView);
 videoRouter.post("/combine-video", videoController.combineCloudVideosById);
 
 videoRouter.get("/stream-video", videoController.videoStreaming);
+
+videoRouter.delete("/delete-video/:videoId", videoController.deleteVideo);
 
 module.exports = videoRouter;

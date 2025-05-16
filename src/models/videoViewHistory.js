@@ -1,23 +1,29 @@
 const mongoose = require("mongoose");
 
-const videoViewHistorySchema = new mongoose.Schema({
-  videoId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Video",
-    required: true,
+const videoViewSubSchema = new mongoose.Schema(
+  {
+    videoId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Video",
+      required: true,
+    },
+    lastViewedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  channelId: {
+  { _id: false }
+);
+
+const videoViewHistorySchema = new mongoose.Schema({
+  userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Channel",
     required: true,
+    unique: true,
   },
-  lastViewedAt: {
-    type: Date,
-    default: Date.now,
-  },
+  listVideoId: [videoViewSubSchema],
 });
-
-videoViewHistorySchema.index({ videoId: 1, channelId: 1 }, { unique: true });
 
 const VideoViewHistory = mongoose.model(
   "VideoViewHistory",

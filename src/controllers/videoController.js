@@ -1,6 +1,7 @@
 const axios = require("axios");
 const Video = require("../models/video");
 const Channel = require("../models/channel");
+const Playlist = require("../models/playlist");
 const VideoViewHistory = require("../models/videoViewHistory");
 const cloudinary = require("cloudinary").v2;
 const asyncHandler = require("express-async-handler");
@@ -12,6 +13,7 @@ const execPromise = require("../utils/videoUtils/execPromise");
 const getVideoDuration = require("../utils/videoUtils/getVideoDuration");
 
 const { v4: uuidv4 } = require("uuid"); // Thêm dòng này đầu file nếu chưa có
+const deleteFromCloudinary = require("../utils/cloudinary/deleteFromCloudinary");
 
 const getVideo = asyncHandler(async (req, res) => {
   if (!req.files || !req.files.videoFile) {
@@ -138,8 +140,10 @@ const createVideo = asyncHandler(async (req, res, next) => {
     title,
     description,
     categories,
+    playlists,
     channelId,
     duration,
+    isPrivate,
   } = req.body;
 
   // Kiểm tra hợp lệ
@@ -156,8 +160,19 @@ const createVideo = asyncHandler(async (req, res, next) => {
       description,
       duration,
       category: categories,
-      createdAt: new Date(),
+      playList: playlists,
+      isPrivate,
     });
+
+    const channel = await Channel.findById(channelId);
+
+    if (!channel) {
+      return res.status(404).json({ message: "Channel not found" });
+    }
+
+    channel.videoTotal += 1;
+
+    await channel.save();
 
     res.status(201).json({
       success: true,
@@ -184,6 +199,12 @@ const generateSignature = asyncHandler(async (req, res, next) => {
       { timestamp: timestamp, folder: folder },
       process.env.CLOUDINARY_SECRET
     );
+
+    // console.log("📦 Backend signing:", {
+    //   folder,
+    //   timestamp,
+    //   signature,
+    // });
 
     res.status(200).json({ success: true, timestamp, signature });
   } catch (err) {
@@ -258,13 +279,13 @@ const cleanupFolder = asyncHandler(async (req, res) => {
 // Hàm lấy tất cả video từ cơ sở dữ liệu
 const getAllVideos = asyncHandler(async (req, res) => {
   try {
-    const videos = await Video.find().populate(
+    const videos = await Video.find({ isPrivate: false }).populate(
       "uploader",
       "nameChannel avatarChannel"
     );
 
     if (videos.length === 0) {
-      return res.status(404).json({ message: "Không có video nào" });
+      return res.status(404).json({ message: "Không có video công khai nào" });
     }
 
     res.status(200).json({
@@ -272,10 +293,69 @@ const getAllVideos = asyncHandler(async (req, res) => {
       videos,
     });
   } catch (err) {
-    console.error("Lỗi khi lấy danh sách video:", err);
+    console.error("Lỗi khi lấy danh sách video công khai:", err);
     res
       .status(500)
       .json({ message: "Lỗi server khi lấy video", error: err.message });
+  }
+});
+
+const getAllChannelVideos = asyncHandler(async (req, res) => {
+  const { channelId } = req.params;
+
+  if (!channelId) {
+    return res.status(400).json({ message: "Thiếu channelId" });
+  }
+
+  try {
+    const videos = await Video.find({
+      uploader: channelId,
+      isPrivate: false,
+    }).populate("uploader", "nameChannel avatarChannel");
+
+    if (videos.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "Không có video công khai nào cho kênh này" });
+    }
+
+    res.status(200).json({
+      success: true,
+      videos,
+    });
+  } catch (err) {
+    console.error("❌ Lỗi khi lấy video công khai theo channelId:", err);
+    res.status(500).json({
+      message: "Lỗi server khi lấy video từ kênh",
+      error: err.message,
+    });
+  }
+});
+
+const getAllUserVideos = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    return res.status(400).json({ message: "Thiếu userId" });
+  }
+
+  try {
+    const userVideos = await Video.find({ uploader: userId }).populate(
+      "uploader",
+      "nameChannel avatarChannel"
+    );
+
+    if (userVideos.length === 0) {
+      return res.status(404).json({ message: "Người dùng chưa tạo video nào" });
+    }
+
+    res.status(200).json({
+      success: true,
+      videos: userVideos,
+    });
+  } catch (err) {
+    console.error("❌ Lỗi khi lấy video của user:", err);
+    res.status(500).json({ message: "Lỗi server khi lấy video người dùng" });
   }
 });
 
@@ -286,7 +366,7 @@ const getVideoInfo = asyncHandler(async (req, res) => {
   try {
     const video = await Video.findById(req.params.videoId).populate(
       "uploader",
-      "nameChannel avatarChannel subscribers"
+      "nameChannel avatarChannel subscribers subscribersCount"
     );
 
     if (!video)
@@ -298,50 +378,67 @@ const getVideoInfo = asyncHandler(async (req, res) => {
 });
 
 const updateVideoView = asyncHandler(async (req, res) => {
-  const { videoId, channelId } = req.body;
+  const { videoId, userId } = req.body;
 
-  if (!videoId || !channelId) {
-    return res.status(400).json({ message: "Thiếu videoId hoặc channelId" });
+  if (!videoId || !userId) {
+    return res.status(400).json({ message: "Thiếu videoId hoặc userId" });
   }
 
   try {
-    const video = await Video.findById(videoId);
+    const now = Date.now();
+    const THIRTY_SECONDS = 30 * 1000;
+
+    // Tìm lịch sử xem của user
+    let viewHistory = await VideoViewHistory.findOne({ userId });
+
+    if (viewHistory) {
+      const videoIndex = viewHistory.listVideoId.findIndex(
+        (entry) => entry.videoId.toString() === videoId
+      );
+
+      if (videoIndex !== -1) {
+        const lastViewed = new Date(
+          viewHistory.listVideoId[videoIndex].lastViewedAt
+        ).getTime();
+        if (now - lastViewed < THIRTY_SECONDS) {
+          return res
+            .status(200)
+            .json({ message: "Đã xem gần đây, không tăng view" });
+        }
+        // Cập nhật thời gian
+        viewHistory.listVideoId[videoIndex].lastViewedAt = now;
+      } else {
+        // Thêm video mới vào danh sách
+        viewHistory.listVideoId.push({ videoId, lastViewedAt: now });
+      }
+
+      await viewHistory.save();
+    } else {
+      // Tạo lịch sử mới cho user
+      const newHistory = new VideoViewHistory({
+        userId,
+        listVideoId: [{ videoId, lastViewedAt: now }],
+      });
+      await newHistory.save();
+    }
+
+    const video = await Video.findById(videoId).select("uploader");
+
     if (!video) {
       return res.status(404).json({ message: "Không tìm thấy video" });
     }
 
-    const now = Date.now();
-    const THIRTY_SECONDS = 30 * 1000;
+    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
 
-    let viewHistory = await VideoViewHistory.findOne({ videoId, channelId });
-
-    if (viewHistory) {
-      const lastViewed = new Date(viewHistory.lastViewedAt).getTime();
-
-      if (now - lastViewed < THIRTY_SECONDS) {
-        // Người này đã xem video trong 30 giây qua => không tăng view
-        return res.status(200).json({ message: "Đã xem gần đây, không tăng view" });
-      }
-
-      // Cập nhật thời gian xem mới nhất
-      viewHistory.lastViewedAt = now;
-      await viewHistory.save();
-    } else {
-      // Nếu chưa có record, tạo mới
-      viewHistory = new VideoViewHistory({
-        videoId,
-        channelId,
-        lastViewedAt: now,
+    if (video.uploader) {
+      await Channel.findByIdAndUpdate(video.uploader, {
+        $inc: { viewTotal: 1 },
       });
-      await viewHistory.save();
     }
 
-    // Tăng view
-    video.views += 1;
-    await video.save();
-
-    res.status(200).json({ message: "Tăng view thành công", views: video.views });
-
+    res
+      .status(200)
+      .json({ message: "Tăng view thành công", views: video.views });
   } catch (error) {
     console.error("❌ Lỗi khi cập nhật view:", error);
     res.status(500).json({ message: "Lỗi server khi cập nhật view" });
@@ -467,7 +564,7 @@ const videoStreaming = asyncHandler(async (req, res) => {
         if (!inUse[videoPath]) {
           handleCleanup(videoPath);
         }
-      }, 30 * 1000);
+      }, 300 * 1000);
     });
 
     stream.on("end", () => {
@@ -480,7 +577,7 @@ const videoStreaming = asyncHandler(async (req, res) => {
           if (!inUse[videoPath]) {
             handleCleanup(videoPath);
           }
-        }, 15 * 1000); // Dọn sau 15s
+        }, 150 * 1000); // Dọn sau 15s
       }
     });
 
@@ -494,7 +591,7 @@ const videoStreaming = asyncHandler(async (req, res) => {
           if (!inUse[videoPath]) {
             handleCleanup(videoPath);
           }
-        }, 15 * 1000);
+        }, 150 * 1000);
       }
     });
 
@@ -540,7 +637,7 @@ const videoStreaming = asyncHandler(async (req, res) => {
         if (!inUse[videoPath]) {
           handleCleanup(videoPath);
         }
-      }, 15 * 1000); // Dọn sau 15s
+      }, 150 * 1000); // Dọn sau 15s
     }
   });
 
@@ -554,7 +651,7 @@ const videoStreaming = asyncHandler(async (req, res) => {
         if (!inUse[videoPath]) {
           handleCleanup(videoPath);
         }
-      }, 15 * 1000);
+      }, 150 * 1000);
     }
   });
 
@@ -566,8 +663,56 @@ const videoStreaming = asyncHandler(async (req, res) => {
       if (!inUse[videoPath]) {
         handleCleanup(videoPath);
       }
-    }, 30 * 1000);
+    }, 300 * 1000);
   });
+});
+
+// const deleteFromCloudinary = async (videoUrls) => {
+//   if (!Array.isArray(videoUrls)) return;
+
+//   await Promise.all(
+//     videoUrls.map(async (url) => {
+//       try {
+//         // Lấy public_id bằng regex
+//         const matches = url.match(/upload\/(?:v\d+\/)?([^\.]+)\.mp4/);
+//         if (!matches || !matches[1]) {
+//           console.warn("Không lấy được public_id từ URL:", url);
+//           return;
+//         }
+
+//         const publicId = matches[1];
+
+//         await cloudinary.uploader.destroy(publicId, { resource_type: "video" });
+//         console.log(`✅ Đã xóa Cloudinary video: ${publicId}`);
+//       } catch (err) {
+//         console.error("❌ Lỗi khi xóa video:", err.message);
+//       }
+//     })
+//   );
+// };
+
+const deleteVideo = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+  const video = await Video.findById(videoId);
+  if (!video) return res.status(404).json({ message: "Video không tồn tại" });
+
+  await deleteFromCloudinary(video.url);
+
+  await Playlist.updateMany(
+    { "videos.video": video._id },
+    { $pull: { videos: { video: video._id } } }
+  );
+
+  await Channel.updateOne(
+    { _id: video.uploader },
+    { $pull: { videos: video._id }, $inc: { videoTotal: -1 } }
+  );
+
+  await video.deleteOne();
+  res
+    .status(200)
+    .json({ video, message: `Đã xóa video ${video.title} thành công` });
 });
 
 module.exports = {
@@ -580,8 +725,11 @@ module.exports = {
   cleanupFolder,
 
   getAllVideos,
+  getAllChannelVideos,
+  getAllUserVideos,
   getVideoInfo,
   updateVideoView,
   combineCloudVideosById,
   videoStreaming,
+  deleteVideo,
 };

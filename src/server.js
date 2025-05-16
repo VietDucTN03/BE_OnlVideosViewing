@@ -6,9 +6,10 @@ const connectDB = require("./config/connectDB");
 const rootRouter = require("./routes/rootRouter");
 require("./passport");
 
+const { app, httpServer } = require("./utils/socket.io/socket");
+
 const fileUpload = require("express-fileupload");
 
-const app = express();
 app.use(cookieParser());
 app.use(
   cors({
@@ -33,6 +34,6 @@ app.use(rootRouter);
 
 const port = process.env.PORT || 8080;
 
-app.listen(port, () => {
+httpServer.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

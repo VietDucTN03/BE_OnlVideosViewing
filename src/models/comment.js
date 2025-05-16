@@ -2,23 +2,32 @@ const mongoose = require("mongoose");
 
 const commentSchema = new mongoose.Schema(
     {
-        videoId: { 
-            type: mongoose.Schema.Types.ObjectId, 
-            ref: "video", 
-            required: true 
+        refId: {
+            type: mongoose.Schema.Types.ObjectId,
+            required: true,
+        },
+        refType: {
+            type: String,
+            enum: ["Video", "Blog"],
+            required: true,
         },
         parentComment: { 
             type: mongoose.Schema.Types.ObjectId, 
-            ref: "comment", 
+            ref: "Comment", 
             default: null  // Nếu null thì đây là comment gốc
         },
+        // receiverInfo: {
+        //     type: mongoose.Schema.Types.ObjectId,
+        //     ref: "Channel",
+        //     default: null
+        // },
         content: { 
             type: String, 
             required: true 
         },
         postedBy: { 
             type: mongoose.Schema.Types.ObjectId, 
-            ref: "channel",
+            ref: "Channel",
             required: true 
         },
         status: [{
@@ -28,12 +37,12 @@ const commentSchema = new mongoose.Schema(
             },
             postedBy: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: "channel"
+                ref: "Channel"
             }
         }],
-        createdAt: { 
-            type: Date, 
-            default: Date.now 
+        replyCount: {
+            type: Number,
+            default: 0
         }
     },
     { timestamps: true }
