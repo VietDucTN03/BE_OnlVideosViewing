@@ -1,6 +1,6 @@
 const express = require("express");
 
-const Channel = require("../../models/channel");
+const Channel = require("../../models/user/channel");
 
 const { Server } = require("socket.io");
 const { createServer } = require("http");
