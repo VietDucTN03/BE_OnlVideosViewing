@@ -24,4 +24,8 @@ shortVideoRouter.post("/create-short-video", shortVideoController.createShortVid
 
 shortVideoRouter.put("/update-short-video-view", shortVideoController.updateShortVideoView);
 
+shortVideoRouter.put("/edit-short-video/:shortVideoId", shortVideoController.editShortVideo);
+
+shortVideoRouter.delete("/delete-short-video/:shortVideoId", shortVideoController.deleteShortVideo);
+
 module.exports = shortVideoRouter;

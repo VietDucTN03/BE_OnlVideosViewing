@@ -4,6 +4,7 @@ const ShortVideoInteraction = require("../../models/userActivity/shortVideoInter
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
+const deleteFromCloudinary = require("../../utils/cloudinary/deleteFromCloudinary");
 
 // Lấy tất cả short videos trong DB (Admin)
 const getAllShortVideos = asyncHandler(async (req, res) => {
@@ -397,7 +398,10 @@ const deterministicShuffle = (ids, seed) => {
     .map((id) => ({
       id,
       // SHA‑1 cho khoá sắp xếp giả‑ngẫu‑nhiên nhưng ổn định
-      sortKey: crypto.createHash("sha1").update(id + seed).digest("hex"),
+      sortKey: crypto
+        .createHash("sha1")
+        .update(id + seed)
+        .digest("hex"),
     }))
     .sort((a, b) => (a.sortKey > b.sortKey ? 1 : -1))
     .map((item) => item.id);
@@ -417,7 +421,9 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
   }
 
   if (!mongoose.Types.ObjectId.isValid(shortVideoIdByParams)) {
-    return res.status(400).json({ message: "shortVideoIdByParams không hợp lệ" });
+    return res
+      .status(400)
+      .json({ message: "shortVideoIdByParams không hợp lệ" });
   }
 
   const loggedIn = isLoggedIn === "true";
@@ -428,13 +434,24 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
   }).lean();
 
   if (!referenceVideo) {
-    return res.status(404).json({ message: "shortVideoIdByParams không tồn tại hoặc riêng tư" });
+    return res
+      .status(404)
+      .json({ message: "shortVideoIdByParams không tồn tại hoặc riêng tư" });
   }
 
   const [topCommented, topLiked, topViewed] = await Promise.all([
-    ShortVideo.find({ isPrivate: false }).sort({ commentTotal: -1 }).limit(50).select("_id"),
-    ShortVideo.find({ isPrivate: false }).sort({ "statusTotal.like": -1 }).limit(50).select("_id"),
-    ShortVideo.find({ isPrivate: false }).sort({ views: -1 }).limit(50).select("_id"),
+    ShortVideo.find({ isPrivate: false })
+      .sort({ commentTotal: -1 })
+      .limit(50)
+      .select("_id"),
+    ShortVideo.find({ isPrivate: false })
+      .sort({ "statusTotal.like": -1 })
+      .limit(50)
+      .select("_id"),
+    ShortVideo.find({ isPrivate: false })
+      .sort({ views: -1 })
+      .limit(50)
+      .select("_id"),
   ]);
 
   const sameTagCatWithRef = await ShortVideo.find({
@@ -450,7 +467,9 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
   let videosFromSubscribedChannels = [];
 
   if (loggedIn && userId && mongoose.Types.ObjectId.isValid(userId)) {
-    const interactions = await ShortVideoInteraction.find({ userId }).select("shortVideoId");
+    const interactions = await ShortVideoInteraction.find({ userId }).select(
+      "shortVideoId"
+    );
     const interactionIds = interactions.map((i) => i.shortVideoId);
 
     if (interactionIds.length) {
@@ -475,7 +494,9 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
       }).select("_id");
     }
 
-    const userChannel = await Channel.findById(userId).select("channelsSubscribed");
+    const userChannel = await Channel.findById(userId).select(
+      "channelsSubscribed"
+    );
     if (userChannel && userChannel.channelsSubscribed.length) {
       videosFromSubscribedChannels = await ShortVideo.find({
         isPrivate: false,
@@ -691,6 +712,73 @@ const updateShortVideoView = asyncHandler(async (req, res) => {
   }
 });
 
+const editShortVideo = asyncHandler(async (req, res) => {
+  const { shortVideoId } = req.params;
+  const { title, description, thumbnailUrl, tags, categories, isPrivate } =
+    req.body;
+
+  try {
+    const shortVideo = await ShortVideo.findById(shortVideoId);
+
+    if (!shortVideo) {
+      return res.status(404).json({ message: "Short video not found" });
+    }
+
+    if (thumbnailUrl && thumbnailUrl !== shortVideo.thumbnail) {
+      // Xóa thumbnail cũ khỏi Cloudinary
+      await deleteFromCloudinary([shortVideo.thumbnail], "image");
+      shortVideo.thumbnail = thumbnailUrl;
+    }
+
+    if (title !== undefined) shortVideo.title = title;
+    if (description !== undefined) shortVideo.description = description;
+    if (tags !== undefined) shortVideo.tags = tags;
+    if (Array.isArray(categories)) shortVideo.category = categories;
+    if (isPrivate !== undefined) shortVideo.isPrivate = isPrivate;
+
+    await shortVideo.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Short video updated successfully",
+      updatedShortVideo: shortVideo,
+    });
+  } catch (error) {
+    console.error("❌ Lỗi khi cập nhật short video:", error);
+    res.status(500).json({
+      message: "Lỗi server khi cập nhật short video",
+      error: error.message,
+    });
+  }
+});
+
+const deleteShortVideo = asyncHandler(async (req, res) => {
+  const { shortVideoId } = req.params;
+
+  try {
+    const shortVideo = await ShortVideo.findById(shortVideoId);
+
+    if (!shortVideo) {
+      return res.status(404).json({ message: "Short video not found" });
+    }
+
+    await deleteFromCloudinary([shortVideo.url], "video");
+    await deleteFromCloudinary([shortVideo.thumbnail], "image");
+
+    await shortVideo.deleteOne();
+
+    res.status(200).json({ shortVideo, message: "Short video deleted successfully" });
+  } catch (error) {
+    console.error("❌ Lỗi khi xóa short video:", error);
+    res
+      .status(500)
+      .json({
+        message: "Lỗi server khi xóa short video",
+        error: error.message,
+      });
+  }
+});
+
 module.exports = {
   getAllShortVideos,
   getShortVideoForViewing,
@@ -702,4 +790,6 @@ module.exports = {
   getShortVideoInfo,
   createShortVideo,
   updateShortVideoView,
+  editShortVideo,
+  deleteShortVideo,
 };

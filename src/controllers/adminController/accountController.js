@@ -35,7 +35,7 @@ const getAllAccounts = asyncHandler(async (req, res) => {
   const { page = 1, sort = "createdAtDesc", status, keyword = "" } = req.query;
 
   const pageNum = parseInt(page);
-  const limit = 5;
+  const limit = 10;
   const skip = (pageNum - 1) * limit;
 
   // Điều kiện sắp xếp

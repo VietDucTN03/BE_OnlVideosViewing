@@ -32,6 +32,8 @@ adminRouter.get("/get-all-blogs-of-channel/:channelId", protect, isAdminOrSuperA
 
 adminRouter.get("/get-report-reviews-by-channel/:channelId", protect, isAdminOrSuperAdmin, accountController.getReportReviewsByChannel);
 
+adminRouter.put("/block-user-if-channel-banned/:userId", protect, isAdminOrSuperAdmin, accountController.blockUserIfChannelBanned);
+
 //* Video
 
 adminRouter.get("/get-video-stats", protect, isAdminOrSuperAdmin, videoController.getVideoStats);
@@ -51,7 +53,5 @@ adminRouter.get("/get-report-review-by-id/:reportId", protect, isAdminOrSuperAdm
 // adminRouter.put("/resolve-video-report/:reportId", protect, isAdminOrSuperAdmin, reportController.resolveVideoReport);
 
 adminRouter.put("/resolve-report-review/:reportId", protect, isAdminOrSuperAdmin, reportController.resolveReportReview);
-
-adminRouter.put("/block-user-if-channel-banned/:userId", protect, isAdminOrSuperAdmin, accountController.blockUserIfChannelBanned);
 
 module.exports = adminRouter;
