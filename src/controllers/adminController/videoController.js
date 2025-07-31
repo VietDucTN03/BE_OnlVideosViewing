@@ -132,7 +132,7 @@ const getVideoById = asyncHandler(async (req, res) => {
   const video = await Video.findById(videoId)
     .populate({
       path: "uploader",
-      select: "nameChannel avatarChannel",
+      select: "nameChannel avatarChannel subscribersCount violationStatus owner",
     })
     .lean();
 
@@ -146,16 +146,23 @@ const getVideoById = asyncHandler(async (req, res) => {
     description: video.description,
     thumbnail: video.thumbnail,
     url: video.url,
+    duration: video.duration,
     views: video.views,
     like: video.statusTotal?.like || 0,
     dislike: video.statusTotal?.dislike || 0,
     commentTotal: video.commentTotal,
+    reportReviewCount: video.reportReviewCount,
     reportCount: video.reportCount,
     isPrivate: video.isPrivate,
     category: video.category,
     createdAt: video.createdAt,
+    violationStatus: video.violationStatus,
+    isBanned: video.isBanned,
     channelName: video.uploader?.nameChannel || "Unknown",
     channelAvatar: video.uploader?.avatarChannel || "",
+    channelSubscribersCount: video.uploader?.subscribersCount || 0,
+    channelViolationStatus: video.uploader?.violationStatus || "normal",
+    channelOwner: video.uploader?.owner || false,
   });
 });
 
@@ -188,14 +195,23 @@ const getReportsByVideoId = asyncHandler(async (req, res) => {
   // Lấy danh sách report phân trang
   const reports = await ReportReview.find(query)
     .populate("reporters", "nameChannel avatarChannel")
-    .populate("reportedChannel", "nameChannel avatarChannel")
+    // .populate("reportedChannel", "nameChannel avatarChannel")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
     .lean();
 
   if (!reports || reports.length === 0) {
-    return res.status(404).json({ message: "Không có report nào cho video này" });
+    return res.status(200).json({
+      videoId,
+      totalReports: 0,
+      hasMore: false,
+      page: pageNum,
+      limit,
+      resolvedResult: resolvedResult || "all",
+      reports: [],
+      message: "Không có report nào cho video này",
+    });
   }
 
   const formattedReports = reports.map((report) => ({
@@ -204,11 +220,11 @@ const getReportsByVideoId = asyncHandler(async (req, res) => {
     isResolved: report.isResolved,
     resolvedResult: report.resolvedResult,
     createdAt: report.createdAt,
-    reportedChannel: {
-      id: report.reportedChannel?._id,
-      nameChannel: report.reportedChannel?.nameChannel,
-      avatarChannel: report.reportedChannel?.avatarChannel,
-    },
+    // reportedChannel: {
+    //   id: report.reportedChannel?._id,
+    //   nameChannel: report.reportedChannel?.nameChannel,
+    //   avatarChannel: report.reportedChannel?.avatarChannel,
+    // },
     reporters: report.reporters?.map((rep) => ({
       id: rep._id,
       nameChannel: rep.nameChannel,
@@ -240,6 +256,7 @@ const deleteVideoById = asyncHandler(async (req, res) => {
   }
 
   await deleteFromCloudinary(video.url, "video");
+  await deleteFromCloudinary([video.thumbnail], "image");
 
   // Gỡ video khỏi tất cả playlist chứa nó
   await Playlist.updateMany(

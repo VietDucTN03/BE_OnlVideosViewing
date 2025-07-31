@@ -11,6 +11,20 @@ const checkAndUpdateContentViolationStatus = require("../../utils/checkAndUpdate
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 
+const getReportReviewStats = asyncHandler(async (req, res) => {
+    const totalReports = await ReportReview.countDocuments();
+    const validReports = await ReportReview.countDocuments({ resolvedResult: "valid" });
+    const invalidReports = await ReportReview.countDocuments({ resolvedResult: "invalid" });
+    const pendingReports = await ReportReview.countDocuments({ resolvedResult: "pending" });
+
+    res.status(200).json([
+        { key: "total", value: totalReports, title: "Total Reports" },
+        { key: "valid", value: validReports, title: "Valid Reports" },
+        { key: "invalid", value: invalidReports, title: "Invalid Reports" },
+        { key: "pending", value: pendingReports, title: "Pending Reports" },
+    ]);
+});
+
 const getAllReportReviews = asyncHandler(async (req, res) => {
     const { 
         page = 1, 
@@ -29,24 +43,26 @@ const getAllReportReviews = asyncHandler(async (req, res) => {
     const query = {};
 
     // Filter contentType
-    if (contentType && ["Video", "ShortVideo", "Blog"].includes(contentType)) {
+    if (contentType && contentType !== "all" && ["Video", "ShortVideo", "Blog"].includes(contentType)) {
         query.contentType = contentType;
     }
 
     // Filter resolvedResult
-    if (status && ["valid", "invalid", "pending"].includes(status)) {
+    if (status && status !== "all" && ["valid", "invalid", "pending"].includes(status)) {
         query.resolvedResult = status;
     }
 
     // Filter isResolved
-    if (resolved === "resolved") {
-        query.isResolved = true;
-    } else if (resolved === "unresolved") {
-        query.isResolved = false;
+    if (resolved && resolved !== "all") {
+        if (resolved === "resolved") {
+            query.isResolved = true;
+        } else if (resolved === "unresolved") {
+            query.isResolved = false;
+        }
     }
 
     // Filter reason
-    if (reason) {
+    if (reason && reason !== "all") {
         query.reason = reason;
     }
 
@@ -87,6 +103,7 @@ const getAllReportReviews = asyncHandler(async (req, res) => {
         limit,
         contentType: contentType || "all",
         status: status || "all",
+        sort: sort || "newest",
         resolved: resolved || "all",
         reason: reason || "all",
     });
@@ -284,14 +301,11 @@ const resolveReportReview = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+    getReportReviewStats,
     getAllReportReviews,
     getReportReviewById,
     // resolveVideoReport,
     resolveReportReview,
 };
 
-// * hàm tính lượt cảnh báo dựa trên report (5 report = 1 lượt cảnh báo)
-
 // * hàm gửi Cảnh báo đến tài khoản (thêm số lần bị ăn gậy, 3 lần = ban) theo kiểu email
-
-// * hàm ban tài khoản, ban thành công thì gửi email

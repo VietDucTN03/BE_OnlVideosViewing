@@ -6,6 +6,10 @@ const accountController = require("../../controllers/adminController/accountCont
 
 const videoController = require("../../controllers/adminController/videoController");
 
+const shortVideoController = require("../../controllers/adminController/shortVideoController");
+
+const blogController = require("../../controllers/adminController/blogController");
+
 const reportController = require("../../controllers/adminController/reportController");
 
 const protect = require("../../middlewares/protect");
@@ -42,9 +46,37 @@ adminRouter.get("/get-all-videos", protect, isAdminOrSuperAdmin, videoController
 
 adminRouter.get("/get-video-by-id/:videoId", protect, isAdminOrSuperAdmin, videoController.getVideoById);
 
-adminRouter.put("/delete-video-by-id/:videoId", protect, isAdminOrSuperAdmin, videoController.deleteVideoById);
+adminRouter.get("/get-reports-by-video-id/:videoId", protect, isAdminOrSuperAdmin, videoController.getReportsByVideoId);
+
+adminRouter.delete("/delete-video-by-id/:videoId", protect, isAdminOrSuperAdmin, videoController.deleteVideoById);
+
+// * Short Video
+
+adminRouter.get("/get-short-video-stats", protect, isAdminOrSuperAdmin, shortVideoController.getShortVideoStats);
+
+adminRouter.get("/get-all-short-videos", protect, isAdminOrSuperAdmin, shortVideoController.getAllShortVideos);
+
+adminRouter.get("/get-short-video-by-id/:shortVideoId", protect, isAdminOrSuperAdmin, shortVideoController.getShortVideoById);
+
+adminRouter.get("/get-reports-by-short-video-id/:shortVideoId", protect, isAdminOrSuperAdmin, shortVideoController.getReportsByShortVideoId);
+
+adminRouter.delete("/delete-short-video-by-id/:shortVideoId", protect, isAdminOrSuperAdmin, shortVideoController.deleteShortVideoById);
+
+// * Blog
+
+adminRouter.get("/get-blog-stats", protect, isAdminOrSuperAdmin, blogController.getBlogStats);
+
+adminRouter.get("/get-all-blogs", protect, isAdminOrSuperAdmin, blogController.getAllBlogs);
+
+adminRouter.get("/get-blog-by-id/:blogId", protect, isAdminOrSuperAdmin, blogController.getBlogById);
+
+adminRouter.get("/get-reports-by-blog-id/:blogId", protect, isAdminOrSuperAdmin, blogController.getReportsByBlogId);
+
+adminRouter.delete("/delete-blog-by-id/:blogId", protect, isAdminOrSuperAdmin, blogController.deleteBlogById);
 
 // * Report
+
+adminRouter.get("/get-report-review-stats", protect, isAdminOrSuperAdmin, reportController.getReportReviewStats);
 
 adminRouter.get("/get-all-report-reviews", protect, isAdminOrSuperAdmin, reportController.getAllReportReviews);
 
