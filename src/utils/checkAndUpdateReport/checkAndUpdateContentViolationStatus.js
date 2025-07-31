@@ -2,7 +2,7 @@ const Channel = require("../../models/user/channel");
 const Notification = require("../../models/interactions/notification");
 const { io } = require("../socket.io/socket");
 
-const { checkAndUpdateChannelViolationStatus } = require("./checkAndUpdateChannelViolationStatus");
+const checkAndUpdateChannelViolationStatus = require("./checkAndUpdateChannelViolationStatus");
 
 const checkAndUpdateContentViolationStatus = async ({ content, Model, uploaderField }) => {
 
@@ -38,6 +38,19 @@ const checkAndUpdateContentViolationStatus = async ({ content, Model, uploaderFi
       { _id: uploaderId },
       { $inc: { reportCount: 1 } }
     );
+
+    // Gửi thông báo nội dung bị ban ❌
+    await new Notification({
+      receiverId: uploaderId,
+      type: "banned",
+      message: `Nội dung (${Model.modelName}): ${content.title || content._id} đã bị gỡ khỏi hệ thống do vi phạm nghiêm trọng ❌`,
+      detailContent: `Nội dung (${Model.modelName}): ${content.title || content._id}`,
+    }).save();
+
+    io.to(uploaderId.toString()).emit("banned", {
+      receiverId: uploaderId,
+      message: `Nội dung (${Model.modelName}): ${content.title || content._id} đã bị gỡ khỏi hệ thống do vi phạm nghiêm trọng ❌`,
+    });
 
     await checkAndUpdateChannelViolationStatus(uploaderId);
   }

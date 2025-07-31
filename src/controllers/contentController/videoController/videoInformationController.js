@@ -436,6 +436,7 @@ const deleteVideo = asyncHandler(async (req, res) => {
   if (!video) return res.status(404).json({ message: "Video không tồn tại" });
 
   await deleteFromCloudinary(video.url, "video");
+  await deleteFromCloudinary([video.thumbnail], "image");
 
   await Playlist.updateMany(
     { "videos.video": video._id },
