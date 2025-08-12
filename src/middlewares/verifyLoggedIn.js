@@ -11,17 +11,24 @@ const verifyLoggedIn = async (req, res, next) => {
       return res.status(401).json({ message: "Authentication required" });
     }
 
-    // Giải mã token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id;
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      if (err.name === "TokenExpiredError") {
+        return res.status(401).json({ message: "Token expired" });
+      }
+      if (err.name === "JsonWebTokenError") {
+        return res.status(401).json({ message: "Invalid token" });
+      }
+      throw err; // các lỗi khác
+    }
 
-    // Tìm user trong DB
-    const user = await User.findById(userId);
+    const user = await User.findById(decoded.id);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Gắn thông tin user vào request để dùng ở controller
     req.user = user;
 
     console.log("✅ Xác thực đăng nhập thành công, vào next()");

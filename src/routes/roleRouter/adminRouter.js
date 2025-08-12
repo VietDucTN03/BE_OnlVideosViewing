@@ -12,6 +12,12 @@ const blogController = require("../../controllers/adminController/blogController
 
 const reportController = require("../../controllers/adminController/reportController");
 
+// ** Payment
+
+const subscriptionController = require("../../controllers/adminController/paymentController/subscriptionController");
+
+const userSubscriptionController = require("../../controllers/adminController/paymentController/userSubscriptionController");
+
 const protect = require("../../middlewares/protect");
 
 const isAdminOrSuperAdmin = require("../../middlewares/isAdminOrSuperAdmin");
@@ -85,5 +91,23 @@ adminRouter.get("/get-report-review-by-id/:reportId", protect, isAdminOrSuperAdm
 // adminRouter.put("/resolve-video-report/:reportId", protect, isAdminOrSuperAdmin, reportController.resolveVideoReport);
 
 adminRouter.put("/resolve-report-review/:reportId", protect, isAdminOrSuperAdmin, reportController.resolveReportReview);
+
+// ** Payment
+
+// ? Subscription
+
+adminRouter.get("/get-all-subscription-plans", protect, isAdminOrSuperAdmin, subscriptionController.getAllSubscriptionPlans);
+
+adminRouter.post("/create-subscription-plan", protect, isAdminOrSuperAdmin, subscriptionController.createSubscriptionPlan);
+
+adminRouter.put("/update-subscription-plan/:subscriptionId", protect, isAdminOrSuperAdmin, subscriptionController.updateSubscriptionPlan);
+
+adminRouter.delete("/delete-subscription-plan/:subscriptionId", protect, isAdminOrSuperAdmin, subscriptionController.deleteSubscriptionPlan);
+
+// ? User Subscription
+
+adminRouter.get("/get-user-subscription-history/:userId", protect, isAdminOrSuperAdmin, userSubscriptionController.getUserSubscriptionHistory);
+
+adminRouter.put("/cancel-user-subscription/:userId", protect, isAdminOrSuperAdmin, userSubscriptionController.cancelUserSubscription);
 
 module.exports = adminRouter;

@@ -7,7 +7,7 @@ const subscriptionSchema = new mongoose.Schema(
         name: {
             type: String,
             required: true,
-            enum: ['Premium']
+            enum: ['Basic', 'Premium']
         },
         description: {
             type: String,
@@ -30,7 +30,11 @@ const subscriptionSchema = new mongoose.Schema(
         isActive: {
             type: Boolean,
             default: true
-        }
+        },
+        totalSubscribers: {
+            type: Number,
+            default: 0
+        },
     },
     { timestamps: true }
 );

@@ -1,8 +1,8 @@
 const asyncHandler = require("express-async-handler");
-const Subscription = require("../models/payment/subscription");
-const ChannelSubscription = require("../models/payment/userSubscription");
-const Payment = require("../models/payment/payment");
-const { generateTransactionId } = require("../utils/payment/payment");
+const Subscription = require("../../models/payment/subscription");
+const ChannelSubscription = require("../../models/payment/userSubscription");
+const Payment = require("../../models/payment/payment");
+const { generateTransactionId } = require("../../utils/payment/payment");
 
 const getSubscriptionPlans = asyncHandler(async (req, res) => {
   try {

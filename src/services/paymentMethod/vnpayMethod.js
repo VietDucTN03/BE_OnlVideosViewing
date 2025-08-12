@@ -108,6 +108,10 @@ const callbackVnpay = asyncHandler(async (req, res) => {
                 return res.status(404).json({ message: "Subscription not found" });
             }
 
+            // ✅ Cộng 1 vào totalSubscribers
+            subscription.totalSubscribers += 1;
+            await subscription.save();
+
             const startDate = new Date();
             let endDate = new Date(startDate);
 
@@ -131,7 +135,7 @@ const callbackVnpay = asyncHandler(async (req, res) => {
                 paymentId: payment._id,
                 startDate,
                 endDate,
-                autoRenew: true,
+                // autoRenew: true,
                 status: "active"
             });
 

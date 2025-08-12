@@ -26,10 +26,10 @@ const userSubscriptionSchema = new mongoose.Schema(
             type: Date,
             required: true
         },
-        autoRenew: {    // ? Tự động gia hạn.
-            type: Boolean,
-            // default: true
-        },
+        // autoRenew: {    // ? Tự động gia hạn.
+        //     type: Boolean,
+        //     // default: true
+        // },
         status: {
             type: String,
             enum: ['active', 'expired', 'cancelled'],
