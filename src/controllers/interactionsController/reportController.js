@@ -72,7 +72,7 @@ const createReportReview = asyncHandler(async (req, res) => {
     }
 
     return res.status(201).json({
-        message: "Báo cáo của bạn đã được gửi.",
+        message: "Your report has been sent.",
         report: newReport
     });
 });

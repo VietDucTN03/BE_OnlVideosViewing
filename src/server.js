@@ -10,7 +10,7 @@ const { app, httpServer } = require("./utils/socket.io/socket");
 
 const fileUpload = require("express-fileupload");
 
-const { generalLimiter } = require("./middlewares/rateLimit");
+// const { generalLimiter } = require("./middlewares/rateLimit");
 
 const errorHandler = require("./middlewares/errorHandler");
 
@@ -27,7 +27,7 @@ app.use(express.urlencoded({ extended: true }));
 
 connectDB();
 
-app.use(generalLimiter);
+// app.use(generalLimiter);
 
 app.use(
   fileUpload({

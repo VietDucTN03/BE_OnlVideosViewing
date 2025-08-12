@@ -2,49 +2,239 @@ const asyncHandler = require("express-async-handler");
 const Playlist = require("../../models/content/playlist");
 const Video = require("../../models/content/video");
 const Channel = require("../../models/user/channel");
+const mongoose = require("mongoose");
 
 const getPlaylistsByUserId = asyncHandler(async (req, res) => {
   const { userId } = req.params;
+  const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
 
-  if (!userId) {
-    return res.status(400).json({ error: "Missing userId." });
+  // console.log("getPlaylistsByUserId: ", userId);
+
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+    return res.status(400).json({ error: "Invalid or missing userId." });
   }
 
-  const user = await Channel.findById(userId);
-  if (!user) {
-    return res.status(404).json({ error: "User not found." });
+  const ownerId = new mongoose.Types.ObjectId(userId);
+
+  const pageNum = parseInt(page);
+  const limit = 15;
+  const skip = (pageNum - 1) * limit;
+
+  const sortOptions = {
+    createdAtDesc: { createdAt: -1 },
+    createdAtAsc: { createdAt: 1 },
+  };
+
+  const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
+
+  const baseQuery = {
+    owner: ownerId,
+  };
+
+  let totalPlaylists = await Playlist.countDocuments(baseQuery);
+
+  const query = { ...baseQuery };
+  if (keyword) {
+    query.titlePlaylist = { $regex: keyword, $options: "i" };
   }
 
-  const playlists = await Playlist.find({ owner: userId })
-    .sort({ createdAt: -1 })
-    .populate({
-      path: "videos.video",
-      select: "title thumbnail",
+  totalPlaylists = await Playlist.countDocuments(query);
+
+  const totalPages = Math.ceil(totalPlaylists / limit);
+
+  try {
+    const filteredTotal = await Playlist.countDocuments(query);
+
+    const playlists = await Playlist.find(query)
+      .sort(sortCondition)
+      .populate({
+        path: "videos.video",
+        select: "title thumbnail",
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const hasMore = skip + limit < filteredTotal;
+
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        success: true,
+        playlists: [],
+        totalPlaylists: 0,
+        totalPages: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: `No playlists found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalPlaylists === 0) {
+      return res.status(200).json({
+        success: true,
+        playlists: [],
+        totalPlaylists: 0,
+        totalPages: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: "No playlists found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Fetched user playlists successfully.",
+      playlists,
+      totalPlaylists: filteredTotal,
+      totalPages,
+      page: pageNum,
+      limit,
+      totalPages,
+      hasMore,
+      keyword,
+      sort,
     });
+  } catch (error) {
+    console.error("❌ Lỗi khi lấy playlist theo userId:", error);
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch user playlists",
+        error: error.message,
+      });
+  }
 
-  res.status(200).json({ playlists });
+  // const user = await Channel.findById(userId);
+  // if (!user) {
+  //   return res.status(404).json({ error: "User not found." });
+  // }
+
+  // const playlists = await Playlist.find({ owner: userId })
+  //   .sort({ createdAt: -1 })
+  //   .populate({
+  //     path: "videos.video",
+  //     select: "title thumbnail",
+  //   });
+
+  // res.status(200).json({ playlists });
 });
 
 const getPlaylistsByChannelId = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
+  const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
+
+  const pageNum = parseInt(page);
+  const limit = 5;
+  const skip = (pageNum - 1) * limit;
 
   if (!channelId) {
     return res.status(400).json({ error: "Missing channelId." });
   }
 
-  const channel = await Channel.findById(channelId);
-  if (!channel) {
-    return res.status(404).json({ error: "Channel not found." });
+  const sortOptions = {
+    createdAtDesc: { createdAt: -1 },
+    createdAtAsc: { createdAt: 1 },
+  };
+
+  const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
+
+  const baseQuery = {
+    owner: channelId,
+    isPrivate: false,
+  };
+
+  let totalPlaylists = await Playlist.countDocuments(baseQuery);
+
+  const query = { ...baseQuery };
+  if (keyword) {
+    query.titlePlaylist = { $regex: keyword, $options: "i" };
   }
 
-  const playlists = await Playlist.find({ owner: channelId, isPrivate: false })
-    .sort({ createdAt: -1 })
-    .populate({
-      path: "videos.video",
-      select: "title thumbnail",
-    });
+  totalPlaylists = await Playlist.countDocuments(query);
 
-  res.status(200).json({ playlists });
+  try {
+    const filteredTotal = await Playlist.countDocuments(query);
+
+    const playlists = await Playlist.find(query)
+      .sort(sortCondition)
+      .populate({
+        path: "videos.video",
+        select: "title thumbnail",
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const hasMore = skip + limit < filteredTotal;
+
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        success: true,
+        playlists: [],
+        totalPlaylists: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: `No playlists found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalPlaylists === 0) {
+      return res.status(200).json({
+        success: true,
+        playlists: [],
+        totalPlaylists: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: "No playlists found.",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Successfully fetched channel playlists",
+      playlists,
+      totalPlaylists,
+      page: pageNum,
+      limit,
+      hasMore,
+      keyword,
+      sort,
+    });
+  } catch (error) {
+    console.error("❌ Lỗi khi lấy playlist theo channelId:", error);
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch channel playlists",
+        error: error.message,
+      });
+  }
+
+  // const channel = await Channel.findById(channelId);
+  // if (!channel) {
+  //   return res.status(404).json({ error: "Channel not found." });
+  // }
+
+  // const playlists = await Playlist.find({ owner: channelId, isPrivate: false })
+  //   .sort({ createdAt: -1 })
+  //   .populate({
+  //     path: "videos.video",
+  //     select: "title thumbnail",
+  //   });
+
+  // res.status(200).json({ playlists });
 });
 
 const getPlaylistInfo = asyncHandler(async (req, res) => {

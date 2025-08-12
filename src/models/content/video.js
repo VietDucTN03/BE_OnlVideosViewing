@@ -48,6 +48,10 @@ const videoSchema = new mongoose.Schema(
             type: Number,
             default: 0
         },
+        isPremiumOnly: {
+            type: Boolean,
+            default: false
+        },
         violationStatus: {
             type: String,
             enum: ["normal", "warning", "banned"],

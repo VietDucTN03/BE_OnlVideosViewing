@@ -6,17 +6,6 @@ const mongoose = require("mongoose");
 const crypto = require("crypto");
 const deleteFromCloudinary = require("../../utils/cloudinary/deleteFromCloudinary");
 
-// Lấy tất cả short videos trong DB (Admin)
-const getAllShortVideos = asyncHandler(async (req, res) => {
-  try {
-    const allShorts = await ShortVideo.find().sort({ createdAt: -1 });
-    res.status(200).json({ success: true, shorts: allShorts });
-  } catch (error) {
-    console.error("❌ Lỗi khi lấy tất cả short videos:", error);
-    res.status(500).json({ message: "Failed to fetch short videos" });
-  }
-});
-
 // Lấy 5 short video cho viewer (trừ Private) dành cho chưa Login.
 const getShortVideoForViewing = asyncHandler(async (req, res) => {
   try {
@@ -89,80 +78,108 @@ const getShortVideoForViewing = asyncHandler(async (req, res) => {
   }
 });
 
-// Lấy tất cả short videos theo channelId
-// const getAllShortVideosForChannel = asyncHandler(async (req, res) => {
-//   const { channelId } = req.params;
-
-//   try {
-//     const shorts = await ShortVideo.find({
-//       uploader: channelId,
-//       isPrivate: false,
-//     }).sort({ createdAt: -1 });
-
-//     res.status(200).json({ success: true, shorts });
-//   } catch (error) {
-//     console.error("❌ Lỗi khi lấy short videos theo channelId:", error);
-//     res.status(500).json({ message: "Failed to fetch channel short videos" });
-//   }
-// });
-
 const getAllShortVideosForChannel = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 5;
-  const skip = (page - 1) * limit;
+  const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
+
+  const pageNum = parseInt(page);
+  const limit = 5;
+  const skip = (pageNum - 1) * limit;
 
   if (!channelId) {
     return res.status(400).json({ message: "Thiếu channelId." });
   }
 
-  const totalShorts = await ShortVideo.countDocuments({
+  const sortOptions = {
+    createdAtDesc: { createdAt: -1 },
+    createdAtAsc: { createdAt: 1 },
+    viewsDesc: { views: -1 },
+    likesDesc: { "statusTotal.like": -1 },
+  };
+
+  const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
+
+  const baseQuery = {
     uploader: channelId,
     isPrivate: false,
-  });
+    isBanned: false,
+  };
 
-  const shorts = await ShortVideo.find({
-    uploader: channelId,
-    isPrivate: false,
-  })
-    .sort({ createdAt: -1 })
-    .populate("uploader", "nameChannel avatarChannel")
-    .select("-reportReviewCount -reportCount -violationStatus -isBanned")
-    .skip(skip)
-    .limit(limit);
+  let totalShorts = await ShortVideo.countDocuments(baseQuery);
 
-  const hasMore = skip + shorts.length < totalShorts;
-
-  if (totalShorts === 0) {
-    return res.status(200).json({
-      message: "Channel chưa có short video nào.",
-      shorts: [],
-      totalShorts,
-      hasMore: false,
-    });
+  const query = { ...baseQuery };
+  if (keyword) {
+    query.$or = [{ title: { $regex: keyword, $options: "i" } }];
   }
 
-  if (shorts.length === 0) {
-    return res.status(200).json({
-      message: "Không còn short video nào để tải thêm.",
-      shorts: [],
-      totalShorts,
-      hasMore: false,
-    });
-  }
+  totalShorts = await ShortVideo.countDocuments(query);
 
-  res.status(200).json({
-    message: "Lấy short video công khai của channel thành công.",
-    shorts,
-    totalShorts,
-    hasMore,
-  });
+  try {
+    const filteredTotal = await ShortVideo.countDocuments(query);
+
+    const shorts = await ShortVideo.find(query)
+      .sort(sortCondition)
+      .populate("uploader", "nameChannel avatarChannel")
+      .select("-url -reportReviewCount -reportCount -violationStatus")
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const hasMore = skip + limit < filteredTotal;
+
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        success: true,
+        shorts: [],
+        totalShorts: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: `No shorts found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalShorts === 0) {
+      return res.status(200).json({
+        success: true,
+        shorts: [],
+        totalShorts: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: "Channel has no short video.",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Get all short videos for channel successfully.",
+      shorts,
+      totalShorts: filteredTotal,
+      page: pageNum,
+      hasMore,
+      keyword,
+      sort,
+    });
+  } catch (error) {
+    console.error("❌ Lỗi khi lấy short videos theo channelId:", error);
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch channel short videos",
+        error: error.message,
+      });
+  }
 });
 
 // Lấy tất cả short videos theo userId
 const getAllShortVideosForUser = asyncHandler(async (req, res) => {
   const { userId } = req.params;
-  const { page = 1 } = req.query;
+  const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
 
   if (!userId) {
     return res.status(400).json({ message: "Thiếu userId." });
@@ -172,47 +189,97 @@ const getAllShortVideosForUser = asyncHandler(async (req, res) => {
   const limit = 5;
   const skip = (pageNum - 1) * limit;
 
-  const totalShorts = await ShortVideo.countDocuments({ uploader: userId });
+  const sortOptions = {
+    createdAtDesc: { createdAt: -1 },
+    createdAtAsc: { createdAt: 1 },
+    viewsDesc: { views: -1 },
+    likesDesc: { "statusTotal.like": -1 },
+    dislikesDesc: { "statusTotal.dislike": -1 },
+    commentsDesc: { commentTotal: -1 },
+  };
+
+  const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
+
+  const baseQuery = {
+    uploader: userId,
+    isBanned: false,
+  };
+
+  let totalShorts = await ShortVideo.countDocuments(baseQuery);
+
+  const query = { ...baseQuery };
+  if (keyword) {
+    query.$or = [{ title: { $regex: keyword, $options: "i" } }];
+  }
+
+  totalShorts = await ShortVideo.countDocuments(query);
 
   const totalPages = Math.ceil(totalShorts / limit);
 
-  const shorts = await ShortVideo.find({ uploader: userId })
-    .select("-reportReviewCount -reportCount -violationStatus -isBanned")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
+  try {
+    const filteredTotal = await ShortVideo.countDocuments(query);
 
-  const hasMore = skip + shorts.length < totalShorts;
+    const shorts = await ShortVideo.find(query)
+      .sort(sortCondition)
+      .populate("uploader", "nameChannel avatarChannel")
+      .select("-url -reportReviewCount -reportCount -violationStatus")
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-  // Không có short video nào trong toàn bộ hệ thống
-  if (totalShorts === 0) {
-    return res.status(200).json({
-      message: "Người dùng chưa có short video nào.",
-      shorts: [],
-      totalShorts,
-      totalPages: 0,
-      hasMore: false,
-    });
-  }
+    const hasMore = skip + limit < filteredTotal;
 
-  if (shorts.length === 0) {
-    return res.status(200).json({
-      message: "Không còn short video nào của người dùng nào.",
-      shorts: [],
-      totalShorts,
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        success: true,
+        shorts: [],
+        totalShorts: 0,
+        totalPages: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: `No shorts found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalShorts === 0) {
+      return res.status(200).json({
+        success: true,
+        shorts: [],
+        totalShorts: 0,
+        totalPages: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: "User has no short video.",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Get all short videos for user successfully.",
+      shorts,
+      totalShorts: filteredTotal,
       totalPages,
-      hasMore: false,
+      limit,
+      page: pageNum,
+      hasMore,
+      keyword,
+      sort,
     });
+  } catch (error) {
+    console.error("❌ Lỗi khi lấy short videos theo userId:", error);
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch user short videos",
+        error: error.message,
+      });
   }
-
-  res.status(200).json({
-    message: "Lấy short video của người dùng.",
-    shorts,
-    limit,
-    totalShorts,
-    totalPages,
-    hasMore,
-  });
 });
 
 const getRandomShortVideoId = asyncHandler(async (req, res) => {
@@ -230,7 +297,7 @@ const getRandomShortVideoId = asyncHandler(async (req, res) => {
         success: true,
         shortVideoId: null,
         isRandom: true,
-        message: "Hiện chưa có short video công khai nào.",
+        message: "There is no public video short.",
       });
     }
 
@@ -285,7 +352,7 @@ const getRandomShortVideoId = asyncHandler(async (req, res) => {
         success: true,
         shortVideoId: null,
         isRandom: true,
-        message: "Không tìm thấy short video phù hợp.",
+        message: "Short videos are not found.",
       });
     }
 
@@ -293,101 +360,13 @@ const getRandomShortVideoId = asyncHandler(async (req, res) => {
       success: true,
       shortVideoId: randomVideo._id,
       isRandom: true,
-      message: "Lấy short video ngẫu nhiên thành công.",
+      message: "Take a successful random video short.",
     });
   } catch (error) {
     console.error("❌ Lỗi khi lấy short video ngẫu nhiên:", error);
     res.status(500).json({ message: "Lỗi server khi lấy short video" });
   }
 });
-
-// const getAllRandomShortVideoIDs = asyncHandler(async (req, res) => {
-//   try {
-//     const { isLoggedIn, userId, page = 1, limit = 3 } = req.query;
-//     const loggedIn = isLoggedIn === "true";
-//     const pageNum = parseInt(page);
-//     const limitNum = parseInt(limit);
-//     const skip = (pageNum - 1) * limitNum;
-
-//     const allShortVideos = await ShortVideo.find({ isPrivate: false })
-//       .populate("uploader", "subscribers nameChannel")
-//       .select("_id uploader views commentTotal status")
-//       .lean();
-
-//     if (allShortVideos.length === 0) {
-//       return res.status(200).json({
-//         success: true,
-//         shortVideoIds: [],
-//         message: "Hiện chưa có short video công khai nào.",
-//         currentPage: pageNum,
-//         totalItems: 0,
-//         hasMore: false,
-//       });
-//     }
-
-//     let selectedShortVideos = [];
-
-//     if (loggedIn && userId) {
-//       const subscribedChannels = await Channel.find({ subscribers: userId })
-//         .select("_id")
-//         .lean();
-
-//       const subscribedIds = subscribedChannels.map((c) => c._id.toString());
-
-//       const fromSubscribed = allShortVideos.filter((video) =>
-//         subscribedIds.includes(video.uploader?._id?.toString())
-//       );
-
-//       const remainingVideos = allShortVideos.filter(
-//         (video) => !subscribedIds.includes(video.uploader?._id?.toString())
-//       );
-
-//       const sortedByPopularity = [...remainingVideos].sort((a, b) => {
-//         const viewsDiff = (b.views || 0) - (a.views || 0);
-//         if (viewsDiff !== 0) return viewsDiff;
-
-//         const likesA = a.status?.filter((s) => s.statusLike)?.length || 0;
-//         const likesB = b.status?.filter((s) => s.statusLike)?.length || 0;
-//         const likesDiff = likesB - likesA;
-//         if (likesDiff !== 0) return likesDiff;
-
-//         return (b.commentTotal || 0) - (a.commentTotal || 0);
-//       });
-
-//       selectedShortVideos = [...fromSubscribed, ...sortedByPopularity];
-//     } else {
-//       selectedShortVideos = [...allShortVideos].sort((a, b) => {
-//         const viewsDiff = (b.views || 0) - (a.views || 0);
-//         if (viewsDiff !== 0) return viewsDiff;
-
-//         const likesA = a.status?.filter((s) => s.statusLike)?.length || 0;
-//         const likesB = b.status?.filter((s) => s.statusLike)?.length || 0;
-//         const likesDiff = likesB - likesA;
-//         if (likesDiff !== 0) return likesDiff;
-
-//         return (b.commentTotal || 0) - (a.commentTotal || 0);
-//       });
-//     }
-
-//     // Pagination
-//     const totalItems = selectedShortVideos.length;
-//     const paginatedVideos = selectedShortVideos.slice(skip, skip + limitNum);
-//     const shortVideoIds = paginatedVideos.map((video) => video._id);
-//     const hasMore = skip + limitNum < totalItems;
-
-//     return res.status(200).json({
-//       success: true,
-//       shortVideoIds,
-//       message: "Lấy danh sách short video thành công.",
-//       currentPage: pageNum,
-//       totalItems,
-//       hasMore,
-//     });
-//   } catch (error) {
-//     console.error("❌ Lỗi khi lấy danh sách short video:", error);
-//     res.status(500).json({ message: "Lỗi server khi lấy short video" });
-//   }
-// });
 
 /**
  * Tạo chuỗi ngẫu nhiên ổn định (deterministic) từ seed
@@ -423,7 +402,7 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(shortVideoIdByParams)) {
     return res
       .status(400)
-      .json({ message: "shortVideoIdByParams không hợp lệ" });
+      .json({ message: "Shortvideoidbyparams is invalid." });
   }
 
   const loggedIn = isLoggedIn === "true";
@@ -436,7 +415,7 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
   if (!referenceVideo) {
     return res
       .status(404)
-      .json({ message: "shortVideoIdByParams không tồn tại hoặc riêng tư" });
+      .json({ message: "Shortvideoidbyparams does not exist or privacy." });
   }
 
   const [topCommented, topLiked, topViewed] = await Promise.all([
@@ -544,7 +523,7 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
         shortVideoIds: shuffled, // hoặc shuffled.slice(0, shuffled.length)
         totalItems: deduped.length,
         isEnd: true,
-        message: "Đã hết short video",
+        message: "The short video is over.",
       });
     }
 
@@ -560,8 +539,8 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
     isEnd: false,
     message:
       shouldAppend === true || shouldAppend === "true"
-        ? "Thêm shortVideoIds thành công"
-        : "Tải lại shortVideoIds mới thành công",
+        ? "Add a successful shortVideoIds."
+        : "Get a successful shortVideoIds.",
   });
 });
 
@@ -601,7 +580,7 @@ const createShortVideo = asyncHandler(async (req, res, next) => {
     shortUrl,
     tags,
     categories,
-    playlists,
+    // playlists,
     duration,
     isPrivate,
     channelId,
@@ -629,21 +608,28 @@ const createShortVideo = asyncHandler(async (req, res, next) => {
       duration,
       tags,
       category: categories,
-      playList: playlists,
+      // playList: playlists,
       isPrivate,
     });
 
-    const channel = await Channel.findById(channelId);
+    const channel = await Channel.findByIdAndUpdate(
+      channelId,
+      {
+        $inc: {
+          "contentTotal.shortVideos": 1,
+          "contentTotal.total": 1,
+        },
+      },
+      { new: true }
+    );
 
     if (!channel) {
       return res.status(404).json({ message: "Channel not found" });
     }
 
-    channel.videoTotal += 1;
-    await channel.save();
-
     res.status(201).json({
       success: true,
+      message: "Short video created successfully.",
       shortVideo,
     });
   } catch (error) {
@@ -673,7 +659,7 @@ const updateShortVideoView = asyncHandler(async (req, res) => {
       if (now - lastUpdated < THIRTY_SECONDS) {
         return res
           .status(200)
-          .json({ message: "Đã xem gần đây, không tăng view" });
+          .json({ message: "Watching recently, not increasing the view." });
       }
     }
 
@@ -701,7 +687,7 @@ const updateShortVideoView = asyncHandler(async (req, res) => {
     }
 
     res.status(200).json({
-      message: "Tăng view thành công",
+      message: "Increase the view successfully.",
       views: shortVideo?.views,
     });
   } catch (error) {
@@ -740,7 +726,7 @@ const editShortVideo = asyncHandler(async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Short video updated successfully",
+      message: "Short video updated successfully.",
       updatedShortVideo: shortVideo,
     });
   } catch (error) {
@@ -765,22 +751,38 @@ const deleteShortVideo = asyncHandler(async (req, res) => {
     await deleteFromCloudinary([shortVideo.url], "video");
     await deleteFromCloudinary([shortVideo.thumbnail], "image");
 
+    const channelUpdate = await Channel.findByIdAndUpdate(
+      shortVideo.uploader,
+      {
+        $inc: {
+          "contentTotal.shortVideos": -1,
+          "contentTotal.total": -1,
+        },
+      },
+      { new: true }
+    );
+
+    if (!channelUpdate) {
+      return res.status(404).json({ message: "No channel found to update." });
+    }
+
     await shortVideo.deleteOne();
 
-    res.status(200).json({ shortVideo, message: "Short video deleted successfully" });
+    res.status(200).json({
+      message: `Short video with Title "${shortVideo.title}" deleted successfully.`,
+      shortVideo,
+    });
   } catch (error) {
     console.error("❌ Lỗi khi xóa short video:", error);
-    res
-      .status(500)
-      .json({
-        message: "Lỗi server khi xóa short video",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Lỗi server khi xóa short video",
+      error: error.message,
+    });
   }
 });
 
 module.exports = {
-  getAllShortVideos,
+  // getAllShortVideos,
   getShortVideoForViewing,
   getAllShortVideosForChannel,
   getAllShortVideosForUser,

@@ -22,7 +22,7 @@ const notificationSchema = new mongoose.Schema(
         },        
         type: {
             type: String,
-            enum: ["subscribe", "unsubscribe", "like", "comment", "reply", "summary", "comment_summary", "reply_summary", "warning", "banned"],
+            enum: ["subscribe", "unsubscribe", "like", "comment", "reply", "summary", "comment_summary", "reply_summary", "warning", "banned", "premium"],
             required: true,
         },
         groupId: String,  // Id Comment gốc

@@ -2,6 +2,7 @@ const Video = require("../../../models/content/video");
 const Channel = require("../../../models/user/channel");
 const Playlist = require("../../../models/content/playlist");
 const asyncHandler = require("express-async-handler");
+const seedrandom = require("seedrandom");
 
 const deleteFromCloudinary = require("../../../utils/cloudinary/deleteFromCloudinary");
 
@@ -85,30 +86,175 @@ const deleteFromCloudinary = require("../../../utils/cloudinary/deleteFromCloudi
 //   }
 // });
 
-const getVideosForViewingNoLogin = asyncHandler(async (req, res) => {
+// const getVideosForViewingNoLogin = asyncHandler(async (req, res) => {
+//   try {
+//     const { page = 1, limit = 12 } = req.query;
+//     const pageNum = parseInt(page);
+//     const limitNum = parseInt(limit);
+//     const skip = (pageNum - 1) * limitNum;
+
+//     const videos = await Video.find({ isPrivate: false })
+//       .populate("uploader", "nameChannel avatarChannel")
+//       .select("-url -reportReviewCount -reportCount -violationStatus -isBanned")
+//       .lean();
+
+//     if (videos.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         videos: [],
+//         totalItems: 0,
+//         currentPage: pageNum,
+//         hasMore: false,
+//         message: "There is no public video.",
+//       });
+//     }
+
+//     // 1. Lọc theo 4 tiêu chí
+//     const highSub = [...videos].sort(
+//       (a, b) =>
+//         (b.uploader?.subscribersCount || 0) -
+//         (a.uploader?.subscribersCount || 0)
+//     );
+//     const highViews = [...videos].sort(
+//       (a, b) => (b.views || 0) - (a.views || 0)
+//     );
+//     const highLikes = [...videos].sort((a, b) => {
+//       const likesA =
+//         a.status?.filter((s) => s.statusLike === true)?.length || 0;
+//       const likesB =
+//         b.status?.filter((s) => s.statusLike === true)?.length || 0;
+//       return likesB - likesA;
+//     });
+//     const highComments = [...videos].sort(
+//       (a, b) => (b.commentTotal || 0) - (a.commentTotal || 0)
+//     );
+
+//     // 2. Lấy top 10 từ mỗi tiêu chí, kết hợp bằng Set để loại trùng
+//     const topVideos = new Set(
+//       [
+//         ...highSub.slice(0, 10),
+//         ...highViews.slice(0, 10),
+//         ...highLikes.slice(0, 10),
+//         ...highComments.slice(0, 10),
+//       ].map((video) => video._id.toString())
+//     );
+
+//     // 3. Lọc danh sách cuối cùng
+//     const selectedVideos = videos.filter((video) =>
+//       topVideos.has(video._id.toString())
+//     );
+
+//     // 4. Thêm video ngẫu nhiên nếu thiếu
+//     let shuffledVideos = selectedVideos.sort(() => 0.5 - Math.random());
+//     if (shuffledVideos.length < limitNum) {
+//       const remainingVideos = videos.filter(
+//         (v) => !topVideos.has(v._id.toString())
+//       );
+//       const extraVideos = remainingVideos
+//         .sort(() => 0.5 - Math.random())
+//         .slice(0, limitNum - shuffledVideos.length);
+//       shuffledVideos = [...shuffledVideos, ...extraVideos];
+//     }
+
+//     // 5. Phân trang thủ công
+//     const totalItems = shuffledVideos.length;
+//     const paginatedVideos = shuffledVideos.slice(skip, skip + limitNum);
+//     const hasMore = skip + limitNum < totalItems;
+
+//     res.status(200).json({
+//       success: true,
+//       videos: paginatedVideos,
+//       totalItems,
+//       currentPage: pageNum,
+//       hasMore,
+//     });
+//   } catch (err) {
+//     console.error("Lỗi khi lấy danh sách video công khai:", err);
+//     res
+//       .status(500)
+//       .json({ message: "Lỗi server khi lấy video", error: err.message });
+//   }
+// });
+
+const getRecommendedVideos = asyncHandler(async (req, res) => {
   try {
-    const { page = 1, limit = 12 } = req.query;
+    const {
+      isLoggedIn = false,
+      userId = null,
+      sortCategory = "all",
+      page = 1,
+      seed = null, // <-- seed nhận từ FE
+    } = req.query;
+
+    // console.log("seed: ", seed);
+
     const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+    const limit = 9;
+    const skip = (pageNum - 1) * limit;
 
-    const videos = await Video.find({ isPrivate: false })
-      .populate("uploader", "nameChannel avatarChannel")
-      .select("-url -reportReviewCount -reportCount -violationStatus -isBanned")
-      .lean();
+    const baseQuery = {
+      isPrivate: false,
+      isBanned: false,
+    };
 
-    if (videos.length === 0) {
+    if (sortCategory && sortCategory !== "all") {
+      baseQuery.category = { $in: [sortCategory] };
+    }
+
+    let videos = [];
+
+    if (isLoggedIn === "true" && userId) {
+      const userChannel = await Channel.findById(userId).lean();
+      if (!userChannel) {
+        return res.status(404).json({ message: "Channel not found." });
+      }
+
+      const subscribedIds = userChannel.channelsSubscribed || [];
+      const priorityChannels = [...subscribedIds, userChannel._id];
+
+      const priorityVideos = await Video.find({
+        ...baseQuery,
+        uploader: { $in: priorityChannels },
+      })
+        .populate("uploader", "nameChannel avatarChannel subscribersCount")
+        .select(
+          "-description -url -reportReviewCount -reportCount -violationStatus -isBanned"
+        )
+        .lean();
+
+      const otherVideos = await Video.find({
+        ...baseQuery,
+        uploader: { $nin: priorityChannels },
+      })
+        .populate("uploader", "nameChannel avatarChannel subscribersCount")
+        .select(
+          "-description -url -reportReviewCount -reportCount -violationStatus -isBanned"
+        )
+        .lean();
+
+      videos = [...priorityVideos, ...otherVideos];
+    } else {
+      videos = await Video.find(baseQuery)
+        .populate("uploader", "nameChannel avatarChannel subscribersCount")
+        .select(
+          "-description -url -reportReviewCount -reportCount -violationStatus -isBanned"
+        )
+        .lean();
+    }
+
+    if (!videos.length) {
       return res.status(200).json({
         success: true,
         videos: [],
         totalItems: 0,
         currentPage: pageNum,
         hasMore: false,
-        message: "Hiện chưa có video công khai nào.",
+        sortCategory,
+        message: "There is no video to display.",
       });
     }
 
-    // 1. Lọc theo 4 tiêu chí
+    // Tính toán top videos
     const highSub = [...videos].sort(
       (a, b) =>
         (b.uploader?.subscribersCount || 0) -
@@ -117,93 +263,169 @@ const getVideosForViewingNoLogin = asyncHandler(async (req, res) => {
     const highViews = [...videos].sort(
       (a, b) => (b.views || 0) - (a.views || 0)
     );
-    const highLikes = [...videos].sort((a, b) => {
-      const likesA =
-        a.status?.filter((s) => s.statusLike === true)?.length || 0;
-      const likesB =
-        b.status?.filter((s) => s.statusLike === true)?.length || 0;
-      return likesB - likesA;
-    });
     const highComments = [...videos].sort(
       (a, b) => (b.commentTotal || 0) - (a.commentTotal || 0)
     );
 
-    // 2. Lấy top 10 từ mỗi tiêu chí, kết hợp bằng Set để loại trùng
-    const topVideos = new Set(
+    const topVideosSet = new Set(
       [
         ...highSub.slice(0, 10),
         ...highViews.slice(0, 10),
-        ...highLikes.slice(0, 10),
         ...highComments.slice(0, 10),
       ].map((video) => video._id.toString())
     );
 
-    // 3. Lọc danh sách cuối cùng
     const selectedVideos = videos.filter((video) =>
-      topVideos.has(video._id.toString())
+      topVideosSet.has(video._id.toString())
     );
 
-    // 4. Thêm video ngẫu nhiên nếu thiếu
-    let shuffledVideos = selectedVideos.sort(() => 0.5 - Math.random());
-    if (shuffledVideos.length < limitNum) {
-      const remainingVideos = videos.filter(
-        (v) => !topVideos.has(v._id.toString())
-      );
-      const extraVideos = remainingVideos
-        .sort(() => 0.5 - Math.random())
-        .slice(0, limitNum - shuffledVideos.length);
-      shuffledVideos = [...shuffledVideos, ...extraVideos];
-    }
+    const remainingVideos = videos.filter(
+      (v) => !topVideosSet.has(v._id.toString())
+    );
 
-    // 5. Phân trang thủ công
-    const totalItems = shuffledVideos.length;
-    const paginatedVideos = shuffledVideos.slice(skip, skip + limitNum);
-    const hasMore = skip + limitNum < totalItems;
+    // Shuffle phần còn lại theo seed
+    const rng = seedrandom(seed || "default");
 
-    res.status(200).json({
+    const allVideos = [...videos].map((video) => {
+      const isTop = topVideosSet.has(video._id.toString());
+      return {
+        video,
+        sort: rng() + (isTop ? -0.5 : 0),
+      };
+    });
+
+    const finalVideos = allVideos
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ video }) => video);
+
+    const totalItems = finalVideos.length;
+    const paginatedVideos = finalVideos.slice(skip, skip + limit);
+    const hasMore = skip + limit < totalItems;
+
+    return res.status(200).json({
       success: true,
+      message: "Get a list of video.",
       videos: paginatedVideos,
       totalItems,
       currentPage: pageNum,
       hasMore,
+      sortCategory,
+      seed: seed || Date.now().toString(),
     });
   } catch (err) {
-    console.error("Lỗi khi lấy danh sách video công khai:", err);
-    res
-      .status(500)
-      .json({ message: "Lỗi server khi lấy video", error: err.message });
+    console.error("Lỗi khi lấy video:", err);
+    res.status(500).json({
+      message: "Lỗi server khi lấy video",
+      error: err.message,
+    });
   }
 });
 
 const getAllChannelVideos = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
+  const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
+
+  const pageNum = parseInt(page);
+  const limit = 5;
+  const skip = (pageNum - 1) * limit;
 
   if (!channelId) {
-    return res.status(400).json({ message: "Thiếu channelId" });
+    return res.status(400).json({ message: "Missing channelId." });
   }
 
+  const sortOptions = {
+    createdAtDesc: { createdAt: -1 },
+    createdAtAsc: { createdAt: 1 },
+    viewsDesc: { views: -1 },
+    likesDesc: { "statusTotal.like": -1 },
+  };
+
+  const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
+
+  const baseQuery = {
+    uploader: channelId,
+    isBanned: false,
+    isPrivate: false,
+  };
+
+  let totalPublicVideos = await Video.countDocuments(baseQuery);
+
+  const query = { ...baseQuery };
+  if (keyword) {
+    query.$or = [{ title: { $regex: keyword, $options: "i" } }];
+  }
+
+  totalPublicVideos = await Video.countDocuments(query);
+
   try {
-    const videos = await Video.find({ uploader: channelId, isPrivate: false, })
+    const filteredTotal = await Video.countDocuments(query);
+
+    const videos = await Video.find(query)
       .populate("uploader", "nameChannel avatarChannel")
-      .select("-url -reportReviewCount -reportCount -violationStatus -isBanned")
+      .select("-url -reportReviewCount -reportCount -violationStatus")
+      .sort(sortCondition)
+      .skip(skip)
+      .limit(limit)
       .lean();
 
-    if (videos.length === 0) {
+    const hasMore = skip + videos.length < filteredTotal;
+
+    if (keyword && filteredTotal === 0) {
       return res.status(200).json({
         success: true,
         videos: [],
-        message: "Không có video công khai nào cho kênh này.",
+        totalVideos: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: `No videos found matching the keyword "${keyword}".`,
+      });
+    }
+
+    // if (videos.length === 0) {
+    //   return res.status(200).json({
+    //     success: true,
+    //     videos: [],
+    //     totalVideos: 0,
+    //     page: 1,
+    //     limit,
+    //     hasMore: false,
+    //     keyword,
+    //     sort,
+    //     message: "You've reached the end. No more videos to display.",
+    //   });
+    // }
+
+    if (totalPublicVideos === 0) {
+      return res.status(200).json({
+        success: true,
+        videos: [],
+        totalVideos: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: "This channel has no public videos yet.",
       });
     }
 
     res.status(200).json({
       success: true,
+      message: "Fetched channel videos successfully.",
       videos,
+      totalVideos: filteredTotal,
+      page: pageNum,
+      hasMore,
+      keyword,
+      sort,
     });
   } catch (err) {
-    console.error("❌ Lỗi khi lấy video công khai theo channelId:", err);
+    console.error("❌ Error fetching public videos by channelId:", err);
     res.status(500).json({
-      message: "Lỗi server khi lấy video từ kênh",
+      message: "Server error while fetching channel videos.",
       error: err.message,
     });
   }
@@ -211,7 +433,7 @@ const getAllChannelVideos = asyncHandler(async (req, res) => {
 
 const getAllUserVideos = asyncHandler(async (req, res) => {
   const { userId } = req.params;
-  const { page = 1 } = req.query;
+  const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
 
   if (!userId) {
     return res.status(400).json({ message: "Thiếu userId" });
@@ -221,48 +443,95 @@ const getAllUserVideos = asyncHandler(async (req, res) => {
   const limit = 5;
   const skip = (pageNum - 1) * limit;
 
-  const totalVideos = await Video.countDocuments({ uploader: userId });
+  const sortOptions = {
+    createdAtDesc: { createdAt: -1 },
+    createdAtAsc: { createdAt: 1 },
+    viewsDesc: { views: -1 },
+    likesDesc: { "statusTotal.like": -1 },
+    dislikesDesc: { "statusTotal.dislike": -1 },
+    commentsDesc: { commentTotal: -1 },
+  };
+
+  const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
+
+  const baseQuery = {
+    uploader: userId,
+    isBanned: false,
+  };
+
+  let totalVideos = await Video.countDocuments(baseQuery);
+
+  const query = { ...baseQuery };
+  if (keyword) {
+    query.$or = [{ title: { $regex: keyword, $options: "i" } }];
+  }
+
+  totalVideos = await Video.countDocuments(query);
 
   const totalPages = Math.ceil(totalVideos / limit);
 
-  const videos = await Video.find({ uploader: userId })
-    .sort({ createdAt: -1 })
-    .populate("uploader", "nameChannel avatarChannel")
-    .select("-url -reportReviewCount -reportCount -violationStatus -isBanned")
-    .skip(skip)
-    .limit(limit);
+  try {
+    const filteredTotal = await Video.countDocuments(query);
 
-  const hasMore = skip + videos.length < totalVideos;
+    const videos = await Video.find(query)
+      // .sort({ createdAt: -1 })
+      .populate("uploader", "nameChannel avatarChannel")
+      .select("-url -reportReviewCount -reportCount -violationStatus")
+      .sort(sortCondition)
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-  // Không có video nào trong toàn bộ hệ thống
-  if (totalVideos === 0) {
-    return res.status(200).json({
-      message: "Người dùng chưa tạo video nào.",
-      videos: [],
-      totalVideos,
-      totalPages: 0,
-      hasMore: false,
-    });
-  }
+    const hasMore = skip + limit < totalVideos;
 
-  if (videos.length === 0) {
-    return res.status(200).json({
-      message: "Người dùng chưa tạo video nào.",
-      videos: [],
-      totalVideos,
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        success: true,
+        videos: [],
+        page: 1,
+        limit,
+        totalVideos: 0,
+        totalPages: 0,
+        hasMore: false,
+        keyword,
+        sort,
+        message: `No videos found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalVideos === 0) {
+      return res.status(200).json({
+        message: "Users do not have any video.",
+        videos: [],
+        totalVideos,
+        totalPages: 0,
+        hasMore: false,
+        page: 1,
+        limit,
+        keyword,
+        sort,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Fetched channel videos successfully.",
+      videos,
+      page: pageNum,
+      limit,
+      totalVideos: filteredTotal,
       totalPages,
-      hasMore: false,
+      hasMore,
+      keyword,
+      sort,
+    });
+  } catch (err) {
+    console.error("❌ Error fetching public videos by channelId:", err);
+    res.status(500).json({
+      message: "Server error while fetching channel videos.",
+      error: err.message,
     });
   }
-
-  res.status(200).json({
-    success: true,
-    videos,
-    limit,
-    totalVideos,
-    totalPages,
-    hasMore,
-  });
 });
 
 // Get Video Relate
@@ -276,8 +545,13 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
 
   // 1. Lấy video hiện tại
   const currentVideo = await Video.findById(videoId)
-    .populate("uploader", "nameChannel subscribersCount videoTotal viewTotal")
-    .select("-description -url -reportReviewCount -reportCount -violationStatus -isBanned")
+    .populate(
+      "uploader",
+      "nameChannel subscribersCount contentTotal.videos viewTotal"
+    )
+    .select(
+      "-description -url -reportReviewCount -reportCount -violationStatus -isBanned"
+    )
     .lean();
 
   // console.log("currentVideo: ", currentVideo);
@@ -285,12 +559,12 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
   if (!currentVideo) {
     return res
       .status(404)
-      .json({ success: false, message: "Video không tồn tại." });
+      .json({ success: false, message: "Video not found." });
   }
 
   const queryBase = {
-    _id: { $ne: videoId },   // 👈 TRỪ video đang xem
-    isPrivate: false,   // 👈 CHỈ lấy video công khai
+    _id: { $ne: videoId }, // 👈 TRỪ video đang xem
+    isPrivate: false, // 👈 CHỈ lấy video công khai
   };
 
   // 2. Video liên quan theo category, title, uploader
@@ -311,7 +585,9 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
   // 3. Video top view/like/comment (công khai)
   const publicVideos = await Video.find(queryBase)
     .populate("uploader", "subscribersCount")
-    .select("-description -url -reportReviewCount -reportCount -violationStatus -isBanned")
+    .select(
+      "-description -url -reportReviewCount -reportCount -violationStatus -isBanned"
+    )
     .lean();
 
   const topByViews = [...publicVideos]
@@ -345,9 +621,13 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
   }
 
   // 6. Lấy danh sách đầy đủ
-  const finalRelated = await Video.find({  _id: { $in: Array.from(relatedSet) }, })
+  const finalRelated = await Video.find({
+    _id: { $in: Array.from(relatedSet) },
+  })
     .populate("uploader", "nameChannel avatarChannel")
-    .select("-description -url -reportReviewCount -reportCount -violationStatus -isBanned")
+    .select(
+      "-description -url -reportReviewCount -reportCount -violationStatus -isBanned"
+    )
     .lean();
 
   // console.log("finalRelated: ", finalRelated);
@@ -377,8 +657,7 @@ const getVideoInfo = asyncHandler(async (req, res) => {
 
     console.log("video: ", video);
 
-    if (!video)
-      return res.status(404).json({ message: "Không tìm thấy video" });
+    if (!video) return res.status(404).json({ message: "Video not found." });
     res.json(video);
   } catch (error) {
     res.status(500).json({ message: "Lỗi server" });
@@ -387,13 +666,13 @@ const getVideoInfo = asyncHandler(async (req, res) => {
 
 const editVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
-  const { thumbnailUrl, title, description, categories, playlists, isPrivate } =
+  const { thumbnailUrl, title, description, categories, isPremiumOnly, isPrivate } =
     req.body;
 
   try {
     const video = await Video.findById(videoId);
     if (!video) {
-      return res.status(404).json({ message: "Không tìm thấy video" });
+      return res.status(404).json({ message: "Video not found." });
     }
 
     // console.log("Thumbnail: ", video.thumbnail);
@@ -410,14 +689,14 @@ const editVideo = asyncHandler(async (req, res) => {
     if (title !== undefined) video.title = title;
     if (description !== undefined) video.description = description;
     if (Array.isArray(categories)) video.category = categories;
-    if (Array.isArray(playlists)) video.playList = playlists;
+    if (isPremiumOnly !== undefined) video.isPremiumOnly = isPremiumOnly;
     if (isPrivate !== undefined) video.isPrivate = isPrivate;
 
     await video.save();
 
     res.status(200).json({
       success: true,
-      message: "Video đã được cập nhật thành công",
+      message: `Video "${video.title}" updated successfully.`,
       updatedVideo: video,
     });
   } catch (err) {
@@ -433,7 +712,7 @@ const deleteVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
   const video = await Video.findById(videoId);
-  if (!video) return res.status(404).json({ message: "Video không tồn tại" });
+  if (!video) return res.status(404).json({ message: "Video not found." });
 
   await deleteFromCloudinary(video.url, "video");
   await deleteFromCloudinary([video.thumbnail], "image");
@@ -443,19 +722,33 @@ const deleteVideo = asyncHandler(async (req, res) => {
     { $pull: { videos: { video: video._id } } }
   );
 
-  await Channel.updateOne(
-    { _id: video.uploader },
-    { $pull: { videos: video._id }, $inc: { videoTotal: -1 } }
+  const channelUpdate = await Channel.findByIdAndUpdate(
+    video.uploader,
+    {
+      $pull: { videos: video._id },
+      $inc: {
+        "contentTotal.videos": -1,
+        "contentTotal.total": -1,
+      },
+    },
+    { new: true }
   );
 
+  if (!channelUpdate) {
+    return res.status(404).json({ message: "No channel found to update." });
+  }
+
   await video.deleteOne();
-  res
-    .status(200)
-    .json({ video, message: `Đã xóa video ${video.title} thành công` });
+
+  res.status(200).json({
+    message: `Video "${video.title}" deleted successfully.`,
+    video,
+  });
 });
 
 module.exports = {
-  getVideosForViewingNoLogin,
+  // getVideosForViewingNoLogin,
+  getRecommendedVideos,
   getAllChannelVideos,
   getAllUserVideos,
   getRelatedVideos,

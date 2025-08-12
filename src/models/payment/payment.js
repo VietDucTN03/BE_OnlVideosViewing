@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
 
+// ** Phương thức thanh toán.
+
 const paymentSchema = new mongoose.Schema(
     {
-        channelId: {
+        userId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Channel',
+            ref: 'User',
             required: true
         },
         subscriptionId: {
@@ -18,8 +20,8 @@ const paymentSchema = new mongoose.Schema(
         },
         paymentMethod: {
             type: String,
-            required: true,
-            enum: ['credit_card', 'paypal', 'bank_transfer']
+            enum: ['momo', 'vnpay'],
+            required: true
         },
         status: {
             type: String,
@@ -31,11 +33,15 @@ const paymentSchema = new mongoose.Schema(
             type: String,
             unique: true
         },
+        paymentMeta: {   // ? Thông tin tùy theo phương thức.
+            type: Object,
+            default: {}
+        },
         paymentDate: {
             type: Date,
             default: Date.now
         }
-    },  
+    },
     { timestamps: true }
 );
 

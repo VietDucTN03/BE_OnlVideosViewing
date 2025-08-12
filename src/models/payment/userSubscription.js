@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
 
-const channelSubscriptionSchema = new mongoose.Schema(
+// ** Lịch sử đăng ký gói của kênh.
+
+const userSubscriptionSchema = new mongoose.Schema(
     {
-        channelId: {
+        userId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Channel',
+            ref: 'User',
             required: true
         },
         subscriptionId: {
@@ -12,29 +14,30 @@ const channelSubscriptionSchema = new mongoose.Schema(
             ref: 'Subscription',
             required: true
         },
+        paymentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Payment'
+        },
         startDate: {
             type: Date,
-            required: true,
             default: Date.now
         },
         endDate: {
             type: Date,
             required: true
         },
-        autoRenew: {
+        autoRenew: {    // ? Tự động gia hạn.
             type: Boolean,
-            default: true
+            // default: true
         },
         status: {
             type: String,
             enum: ['active', 'expired', 'cancelled'],
             default: 'active'
         },
-        cancelledAt: {
-            type: Date
-        }
-    }, 
+        cancelledAt: Date
+    },
     { timestamps: true }
 );
 
-module.exports = mongoose.model('ChannelSubscription', channelSubscriptionSchema);
+module.exports = mongoose.model('UserSubscription', userSubscriptionSchema);

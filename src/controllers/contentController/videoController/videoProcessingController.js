@@ -142,6 +142,7 @@ const createVideo = asyncHandler(async (req, res, next) => {
     channelId,
     duration,
     isPrivate,
+    isPremiumOnly, 
   } = req.body;
 
   // Kiểm tra hợp lệ
@@ -160,20 +161,27 @@ const createVideo = asyncHandler(async (req, res, next) => {
       category: categories,
       playList: playlists,
       isPrivate,
+      isPremiumOnly,
     });
 
-    const channel = await Channel.findById(channelId);
+    const channel = await Channel.findByIdAndUpdate(
+      channelId,
+      {
+        $inc: {
+          "contentTotal.videos": 1,
+          "contentTotal.total": 1
+        }
+      },
+      { new: true }
+    );
 
     if (!channel) {
       return res.status(404).json({ message: "Channel not found" });
     }
 
-    channel.videoTotal += 1;
-
-    await channel.save();
-
     res.status(201).json({
       success: true,
+      message: `Video "${video.title}" created successfully.`,
       video,
     });
   } catch (err) {
@@ -302,7 +310,7 @@ const updateVideoView = asyncHandler(async (req, res) => {
         if (now - lastViewed < THIRTY_SECONDS) {
           return res
             .status(200)
-            .json({ message: "Đã xem gần đây, không tăng view" });
+            .json({ message: "Watching recently, not increasing the view." });
         }
         // Cập nhật thời gian
         viewHistory.listVideoId[videoIndex].lastViewedAt = now;

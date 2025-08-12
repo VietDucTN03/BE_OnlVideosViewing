@@ -29,7 +29,9 @@ videoRouter.post("/combine-video", videoProcessingController.combineCloudVideosB
 videoRouter.get("/stream-video", videoProcessingController.videoStreaming);
 
 //* Video Information
-videoRouter.get("/get-videos-for-viewing-no-login", videoInformationController.getVideosForViewingNoLogin);
+// videoRouter.get("/get-videos-for-viewing-no-login", videoInformationController.getVideosForViewingNoLogin);
+
+videoRouter.get("/get-recommended-videos", videoInformationController.getRecommendedVideos);
 
 videoRouter.get("/get-all-videos-of-channel/:channelId", videoInformationController.getAllChannelVideos);
 
