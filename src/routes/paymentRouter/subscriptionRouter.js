@@ -2,7 +2,7 @@ const express = require("express");
 
 const subscriptionRouter = express.Router();
 
-const subscriptionServices = require("../../services/subscriptionServices");
+const subscriptionServices = require("../../services/subscriptionServices/subscriptionServices");
 
 const verifyChannelOwnership = require("../../middlewares/verifyChannelOwnership");
 
