@@ -12,7 +12,7 @@ const editChannel = asyncHandler(async (req, res) => {
   const channel = await Channel.findById(channelId);
 
   if (!channel) {
-    return res.status(404).json({ message: "Channel not found" });
+    return res.status(404).json({ message: "Channel not found, please try again." });
   }
 
   // Kiểm tra nameChannel đã tồn tại chưa (ngoại trừ chính channel hiện tại)
@@ -24,7 +24,7 @@ const editChannel = asyncHandler(async (req, res) => {
 
     if (existingChannel) {
       return res.status(400).json({
-        message: "Tên người dùng đã tồn tại, vui lòng nhập tên khác",
+        message: "The username has existed, please enter another name!!",
         errorField: "nameChannel",
       });
     }
@@ -39,7 +39,7 @@ const editChannel = asyncHandler(async (req, res) => {
   await channel.save();
 
   res.status(200).json({
-    message: "Channel profile updated successfully",
+    message: "Channel profile updated successfully.",
     channel,
   });
 });
@@ -53,7 +53,7 @@ const subscribeToChannel = async (req, res) => {
     const sender = await Channel.findById(userId);
 
     if (!channel) {
-      return res.status(404).json({ message: "Channel not found" });
+      return res.status(404).json({ message: "Channel not found." });
     }
 
     // Initialize subscribers array if it's not defined
@@ -64,7 +64,7 @@ const subscribeToChannel = async (req, res) => {
     if (channel.subscribers.includes(userId)) {
       return res
         .status(400)
-        .json({ message: "User already subscribed to this channel" });
+        .json({ message: "User already subscribed to this channel." });
     }
 
     channel.subscribers.push(userId);
@@ -98,7 +98,7 @@ const subscribeToChannel = async (req, res) => {
     console.log("👉 Successfully subscribed to the channel");
 
     return res.status(200).json({
-      message: "Successfully subscribed to the channel",
+      message: "Successfully subscribed to the channel.",
       channel,
     });
   } catch (error) {
@@ -116,13 +116,13 @@ const unsubscribeFromChannel = async (req, res) => {
     const sender = await Channel.findById(userId);
 
     if (!channel) {
-      return res.status(404).json({ message: "Channel not found" });
+      return res.status(404).json({ message: "Channel not found, please try again." });
     }
 
     if (!channel.subscribers || !channel.subscribers.includes(userId)) {
       return res
         .status(400)
-        .json({ message: "User is not subscribed to this channel" });
+        .json({ message: "User is not subscribed to this channel." });
     }
 
     // Remove userId from subscribers array
@@ -141,7 +141,7 @@ const unsubscribeFromChannel = async (req, res) => {
     console.log("👉 Successfully unsubscribed from the channel");
 
     return res.status(200).json({
-      message: "Successfully unsubscribed from the channel",
+      message: "Successfully unsubscribed from the channel.",
       channel,
     });
   } catch (error) {
@@ -156,7 +156,7 @@ const getChannelByNameChannel = asyncHandler(async (req, res) => {
   const channel = await Channel.findOne({ nameChannel });
 
   if (!channel) {
-    return res.status(404).json({ message: "Channel not found" });
+    return res.status(404).json({ message: "Channel not found, please try again." });
   }
 
   res.status(200).json({ channel });
@@ -171,7 +171,7 @@ const getListOfChannelSubscribers = asyncHandler(async (req, res) => {
     const channel = await Channel.findById(channelId).select("subscribers");
 
     if (!channel) {
-      return res.status(404).json({ message: "Channel not found" });
+      return res.status(404).json({ message: "Channel not found, please try again." });
     }
 
     // Lấy thông tin của các channel nằm trong danh sách subscribers
@@ -197,11 +197,11 @@ const getSubscribedChannelsByUserId = asyncHandler(async (req, res) => {
     );
 
     if (!channel) {
-      return res.status(404).json({ message: "Channel not found" });
+      return res.status(404).json({ message: "Channel not found, please try again." });
     }
 
     res.status(200).json({
-      message: "List of channels you have subscribed to",
+      message: "List of channels you have subscribed to.",
       subscribedChannels: channel.channelsSubscribed,
     });
   } catch (error) {

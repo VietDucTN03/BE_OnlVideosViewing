@@ -17,6 +17,9 @@ rootRouter.use("/api/report", require("./interactionsRouter/reportRouter"));
 
 rootRouter.use("/api/search", require("./searchRouter"));
 
+// * Payment Router
+rootRouter.use("/api/payment", require("./paymentRouter/paymentRouter"));
+
 rootRouter.use("/api/subscription", require("./paymentRouter/subscriptionRouter"));
 
 //* Role Router

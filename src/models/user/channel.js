@@ -8,7 +8,7 @@ const channelSchema = new mongoose.Schema({
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
             let result = '';
             for (let i = 0; i < 10; i++) {
-              result += chars.charAt(Math.floor(Math.random() * chars.length));
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
             return `User_${result}`;
         }
@@ -26,6 +26,10 @@ const channelSchema = new mongoose.Schema({
         type: String,
         default: "https://res.cloudinary.com/digngxuqg/image/upload/v1746652226/bannerDefault_idfdwz.jpg"
     },
+    isPremium: {
+        type: Boolean,
+        default: false
+    },
     subscribers: {
         type: [mongoose.Schema.Types.ObjectId],
         ref: "Channel",
@@ -40,9 +44,11 @@ const channelSchema = new mongoose.Schema({
         ref: "Channel",
         default: [],
     },
-    videoTotal: {
-        type: Number,
-        default: 0,
+    contentTotal: {
+        videos: { type: Number, default: 0 },
+        shortVideos: { type: Number, default: 0 },
+        blogs: { type: Number, default: 0 },
+        total: { type: Number, default: 0 }
     },
     viewTotal: {
         type: Number,

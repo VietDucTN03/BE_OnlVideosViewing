@@ -1,12 +1,14 @@
 const asyncHandler = require("express-async-handler");
 const Subscription = require("../models/payment/subscription");
-const ChannelSubscription = require("../models/payment/channelSubscription");
+const ChannelSubscription = require("../models/payment/userSubscription");
 const Payment = require("../models/payment/payment");
 const { generateTransactionId } = require("../utils/payment/payment");
 
 const getSubscriptionPlans = asyncHandler(async (req, res) => {
   try {
-    const plans = await Subscription.find({ isActive: true });
+    const plans = await Subscription.find({ isActive: true })
+      .sort({ price: 1 }); // sắp xếp từ giá thấp -> cao
+
     res.json(plans);
   } catch (error) {
     res.status(500).json({ message: "Error fetching subscription plans" });

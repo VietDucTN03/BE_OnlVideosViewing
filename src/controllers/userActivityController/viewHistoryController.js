@@ -24,7 +24,7 @@ const getViewHistoryByUserId = asyncHandler(async (req, res) => {
   // Kiểm tra nếu không có lịch sử xem thì trả về status 200 và danh sách rỗng
   if (!viewHistory || !viewHistory.listVideoId || viewHistory.listVideoId.length === 0) {
     return res.status(200).json({
-      message: "Không có lịch sử xem.",
+      message: "There is no history.",
       total: 0,
       page,
       limit,
@@ -42,7 +42,7 @@ const getViewHistoryByUserId = asyncHandler(async (req, res) => {
   const paginatedHistory = sortedHistory.slice(startIndex, startIndex + limit);
 
   res.status(200).json({
-    message: "Lấy lịch sử xem theo trang.",
+    message: "Get view history successfully.",
     total: sortedHistory.length,
     page,
     limit,

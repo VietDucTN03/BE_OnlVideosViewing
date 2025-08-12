@@ -1,10 +1,11 @@
 const Blog = require("../../models/content/blog");
+const Channel = require("../../models/user/channel");
 const asyncHandler = require("express-async-handler");
 const deleteFromCloudinary = require("../../utils/cloudinary/deleteFromCloudinary");
 
 const getAllBlogsByUserId = asyncHandler(async (req, res) => {
   const { userId } = req.params;
-  const { page = 1 } = req.query;
+  const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
 
   if (!userId) {
     return res.status(400).json({ message: "Thiếu userId." });
@@ -14,104 +15,198 @@ const getAllBlogsByUserId = asyncHandler(async (req, res) => {
   const limit = 2;
   const skip = (pageNum - 1) * limit;
 
-  const totalBlogs = await Blog.countDocuments({ author: userId });
+  const sortOptions = {
+    createdAtDesc: { createdAt: -1 },
+    createdAtAsc: { createdAt: 1 },
+    likesDesc: { "statusTotal.like": -1 },
+    dislikesDesc: { "statusTotal.dislike": -1 },
+    commentsDesc: { commentTotal: -1 },
+  };
+
+  const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
+
+  const baseQuery = {
+    author: userId,
+    isBanned: false,
+  };
+
+  let totalBlogs = await Blog.countDocuments(baseQuery);
+
+  const query = { ...baseQuery };
+  if (keyword) {
+    query.$or = [
+      { title: { $regex: keyword, $options: "i" } },
+      { content: { $regex: keyword, $options: "i" } },
+    ];
+  }
+
+  totalBlogs = await Blog.countDocuments(query);
 
   const totalPages = Math.ceil(totalBlogs / limit);
 
-  const blogs = await Blog.find({ author: userId })
-    .sort({ createdAt: -1 })
-    .select("-reportReviewCount -reportCount -violationStatus -isBanned")
-    .skip(skip)
-    .limit(limit);
+  try {
+    const filteredTotal = await Blog.countDocuments(query);
 
-  const hasMore = skip + blogs.length < totalBlogs;
+    const blogs = await Blog.find(query)
+      .sort(sortCondition)
+      .select("-reportReviewCount -reportCount -violationStatus")
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-  // Không có blog nào trong toàn bộ hệ thống
-  if (totalBlogs === 0) {
+    const hasMore = skip + blogs.length < filteredTotal;
+
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        success: true,
+        blogs: [],
+        totalBlogs: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: `No blogs found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalBlogs === 0) {
+      return res.status(200).json({
+        success: true,
+        blogs: [],
+        totalBlogs: 0,
+        totalPages: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: "Users do not have any blog.",
+      });
+    }
+
     return res.status(200).json({
-      message: "Người dùng chưa có blog nào.",
-      blogs: [],
-      totalBlogs,
-      totalPages: 0,
-      hasMore: false,
-    });
-  }
-
-  // Hết blog để tải thêm ở trang kế tiếp
-  if (blogs.length === 0) {
-    return res.status(200).json({
-      message: "Không còn blog nào để tải thêm.",
-      blogs: [],
+      success: true,
+      message: "Successfully fetched user blog",
+      blogs,
       totalBlogs,
       totalPages,
-      hasMore: false,
+      page: pageNum,
+      limit,
+      hasMore,
+      keyword,
+      sort,
     });
+  } catch (error) {
+    console.error("❌ Lỗi khi lấy blog theo userId:", error);
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch user blog",
+        error: error.message,
+      });
   }
-
-  // Trường hợp có blog trả về
-  res.status(200).json({
-    message: "Lấy tất cả blogs của user thành công.",
-    blogs,
-    limit,
-    totalBlogs,
-    totalPages,
-    hasMore,
-  });
 });
 
 const getAllBlogsByChannelId = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
-  const { page = 1 } = req.query;
+  const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
 
   if (!channelId) {
     return res.status(400).json({ message: "Thiếu channelId." });
   }
 
-  const pageNum = parseInt(page, 10);
+  const pageNum = parseInt(page);
   const limit = 2;
   const skip = (pageNum - 1) * limit;
 
-  const totalBlogs = await Blog.countDocuments({
+  const sortOptions = {
+    createdAtDesc: { createdAt: -1 },
+    createdAtAsc: { createdAt: 1 },
+    likesDesc: { "statusTotal.like": -1 },
+    commentsDesc: { commentTotal: -1 },
+  };
+
+  const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
+
+  const baseQuery = {
     author: channelId,
     isPrivate: false,
-  });
+    isBanned: false,
+  };
 
-  const blogs = await Blog.find({ author: channelId, isPrivate: false, })
-    .select("-reportReviewCount -reportCount -violationStatus -isBanned")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
+  let totalBlogs = await Blog.countDocuments(baseQuery);
 
-  console.log("blogs: ", blogs);
-
-  const hasMore = skip + blogs.length < totalBlogs;
-
-  // Không có blog nào trong toàn bộ hệ thống
-  if (totalBlogs === 0) {
-    return res.status(200).json({
-      message: "Channel chưa có blog nào.",
-      blogs: [],
-      totalBlogs,
-      hasMore: false,
-    });
+  const query = { ...baseQuery };
+  if (keyword) {
+    query.$or = [
+      { title: { $regex: keyword, $options: "i" } },
+      { content: { $regex: keyword, $options: "i" } },
+    ];
   }
 
-  // Hết blog sé tải thêm ở trang kế tiếp
-  if (blogs.length === 0) {
-    return res.status(200).json({
-      message: "Không còn blog nào để tải thêm.",
-      blogs: [],
-      totalBlogs,
-      hasMore: false,
-    });
-  }
+  totalBlogs = await Blog.countDocuments(query);
 
-  res.status(200).json({
-    message: "Lấy blog công khai của channel thành công.",
-    blogs,
-    totalBlogs,
-    hasMore,
-  });
+  try {
+    const filteredTotal = await Blog.countDocuments(query);
+
+    const blogs = await Blog.find(query)
+      .select("-reportReviewCount -reportCount -violationStatus")
+      .sort(sortCondition)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const hasMore = skip + limit < filteredTotal;
+
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        success: true,
+        blogs: [],
+        totalBlogs: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: `No blogs found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalBlogs === 0) {
+      return res.status(200).json({
+        success: true,
+        blogs: [],
+        totalBlogs: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        message: "Channel has no blog.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Successfully fetched channel blog",
+      blogs,
+      totalBlogs,
+      page: pageNum,
+      limit,
+      hasMore,
+      keyword,
+      sort,
+    });
+  } catch (error) {
+    console.error("❌ Lỗi khi lấy blog theo channelId:", error);
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch channel blog",
+        error: error.message,
+      });
+  }
 });
 
 const getBlogInfo = asyncHandler(async (req, res) => {
@@ -130,13 +225,13 @@ const getBlogInfo = asyncHandler(async (req, res) => {
     .lean();
 
   if (!blog) {
-    return res.status(404).json({ message: "Không tìm thấy blog." });
+    return res.status(404).json({ message: "No blog found." });
   }
 
   // console.log(blog);
 
   res.status(200).json({
-    message: "Lấy thông tin blog thành công.",
+    message: "Get blog information successfully.",
     blog,
   });
 });
@@ -154,29 +249,50 @@ const createBlog = asyncHandler(async (req, res) => {
   ) {
     return res.status(400).json({
       message:
-        "Vui lòng cung cấp đầy đủ title, content, blogImgs, categories, isPrivate và userId.",
+        "Please provide full Title, Content, Blogimgs, Categories, IsPrivate.",
     });
   }
 
   if (!Array.isArray(blogImgs) || !Array.isArray(categories)) {
     return res
       .status(400)
-      .json({ message: "blogImgs và categories phải là mảng." });
+      .json({ message: "Blogimgs and Categories must be arrays." });
   }
 
-  const newBlog = await Blog.create({
-    author: userId,
-    title,
-    content,
-    blogImgs,
-    categories,
-    isPrivate,
-  });
+  try {
+    const newBlog = await Blog.create({
+      author: userId,
+      title,
+      content,
+      blogImgs,
+      categories,
+      isPrivate,
+    });
 
-  res.status(201).json({
-    message: "Tạo blog thành công.",
-    blog: newBlog,
-  });
+    const channel = await Channel.findByIdAndUpdate(
+      userId,
+      {
+        $inc: {
+          "contentTotal.blogs": 1,
+          "contentTotal.total": 1,
+        },
+      },
+      { new: true }
+    );
+
+    if (!channel) {
+      return res.status(404).json({ message: "Channel not found" });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Blog "${title}" created successfully.`,
+      blog: newBlog,
+    });
+  } catch (error) {
+    console.error("❌ Lỗi khi tạo blog:", error);
+    next(error);
+  }
 });
 
 const editBlog = asyncHandler(async (req, res) => {
@@ -190,7 +306,7 @@ const editBlog = asyncHandler(async (req, res) => {
   const blog = await Blog.findById(blogId);
 
   if (!blog) {
-    return res.status(404).json({ message: "Không tìm thấy blog." });
+    return res.status(404).json({ message: "No blog found." });
   }
 
   // Kiểm tra các trường hợp có truyền vào thì mới cập nhật
@@ -199,14 +315,14 @@ const editBlog = asyncHandler(async (req, res) => {
 
   if (blogImgs !== undefined) {
     if (!Array.isArray(blogImgs)) {
-      return res.status(400).json({ message: "blogImgs phải là mảng." });
+      return res.status(400).json({ message: "Blogimgs must be arrays." });
     }
     blog.blogImgs = blogImgs;
   }
 
   if (categories !== undefined) {
     if (!Array.isArray(categories)) {
-      return res.status(400).json({ message: "categories phải là mảng." });
+      return res.status(400).json({ message: "Categories must be arrays." });
     }
     blog.categories = categories;
   }
@@ -218,7 +334,7 @@ const editBlog = asyncHandler(async (req, res) => {
   // console.log(updatedBlog);
 
   res.status(200).json({
-    message: "Cập nhật blog thành công.",
+    message: "Update blog successfully.",
     blog: updatedBlog,
   });
 });
@@ -230,20 +346,34 @@ const deleteBlog = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Thiếu blogId." });
   }
 
-  // Tìm blog để lấy thông tin ảnh
   const blog = await Blog.findById(blogId);
 
   if (!blog) {
-    return res.status(404).json({ message: "Không tìm thấy blog." });
+    return res.status(404).json({ message: "No blog found." });
   }
 
   await deleteFromCloudinary(blog.blogImgs, "image");
+
+  const channelUpdate = await Channel.findByIdAndUpdate(
+    blog.author,
+    {
+      $inc: {
+        "contentTotal.blogs": -1,
+        "contentTotal.total": -1,
+      },
+    },
+    { new: true }
+  );
+
+  if (!channelUpdate) {
+    return res.status(404).json({ message: "No channel found to update." });
+  }
 
   await blog.deleteOne();
 
   res.status(200).json({
     blog,
-    message: `Xóa blog ${blog.title} thành công và ảnh trên Cloudinary.`,
+    message: `Delete the blog "${blog.title}"`,
   });
 });
 

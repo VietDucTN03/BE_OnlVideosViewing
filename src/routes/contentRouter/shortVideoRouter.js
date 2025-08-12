@@ -4,7 +4,7 @@ const shortVideoRouter = express.Router();
 
 const shortVideoController = require("../../controllers/contentController/shortVideoController");
 
-shortVideoRouter.get("/get-all-short-videos", shortVideoController.getAllShortVideos);
+// shortVideoRouter.get("/get-all-short-videos", shortVideoController.getAllShortVideos);
 
 shortVideoRouter.get("/get-short-videos-for-viewing", shortVideoController.getShortVideoForViewing);
 

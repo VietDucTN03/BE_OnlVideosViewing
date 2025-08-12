@@ -454,27 +454,27 @@ const replyComment = asyncHandler(async (req, res) => {
         senderAvatar: sender.avatarChannel,
         type: "reply",
         groupId: parentCommentId,
-        message: `${sender.nameChannel} đã phản hồi bình luận của bạn 💬`,
+        message: `${sender.nameChannel} has responded to your comments 💬`,
         detailContent: content,
         createdAt: new Date(),
       });
 
       io.to(parentOwnerId.toString()).emit("reply-comment", {
         receiverId: parentOwnerId,
-        message: `${sender.nameChannel} đã phản hồi bình luận của bạn 💬`,
+        message: `${sender.nameChannel} has responded to your comments 💬`,
       });
     } else {
       await sendReplySummary({
         receiverId: parentOwnerId,
         groupId: parentCommentId,
         type: "reply_summary",
-        message: `Đã có ${replyCount} phản hồi về bình luận của bạn 💬`,
+        message: `There have been ${replyCount} feedback on your comments 💬`,
         counter: replyCount,
       });
 
       io.to(parentOwnerId.toString()).emit("reply-comment", {
         receiverId: parentOwnerId,
-        message: `Đã có ${replyCount} phản hồi về bình luận của bạn 💬`,
+        message: `There have been ${replyCount} feedback on your comments 💬`,
       });
     }
   }

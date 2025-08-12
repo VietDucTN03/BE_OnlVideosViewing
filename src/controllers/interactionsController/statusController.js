@@ -188,19 +188,19 @@ const handleLikeNotification = async ({
   if (targetUser._id.toString() === userId.toString()) return;
 
   const senderChannel = await Channel.findById(userId);
-  const message = `${senderChannel.nameChannel} vừa thả 👍 cho ${refType} của bạn! 👏`;
+  const message = `${senderChannel.nameChannel} just release 👍 for your ${refType}! 👏`;
 
   if (statusTotal.like > MAX_INDIVIDUAL_NOTIFICATIONS) {
     await sendLikeSummary({
       receiverId: targetUser._id,
       groupId: refId,
       type: "like_summary",
-      message: `${refType} của bạn đã thu hút ${statusTotal.like} lượt yêu thích! 👏`,
+      message: `Your ${refType} has attracted ${statusTotal.like} likes! 👏`,
       counter: statusTotal.like,
     });
 
     io.to(targetUser._id.toString()).emit(`status-${refType.toLowerCase()}`, {
-      message: `${refType} của bạn đã thu hút ${statusTotal.like} lượt yêu thích! 👏`,
+      message: `Your ${refType} has attracted ${statusTotal.like} likes! 👏`,
     });
   } else {
     await createNotification({
@@ -285,7 +285,7 @@ const interactionsStatus = asyncHandler(async (req, res) => {
     "nameChannel avatarChannel"
   );
   if (!refDoc)
-    return res.status(404).json({ message: `${refType} không tồn tại` });
+    return res.status(404).json({ message: `${refType} does not exist.` });
 
   const statusList = await Status.find({ refId, refType });
 
@@ -333,7 +333,7 @@ const interactionsStatus = asyncHandler(async (req, res) => {
   }
 
   res.status(200).json({
-    message: `Status ${refType} ${action} thành công`,
+    message: `Status ${refType} ${action} successfully.`,
     statusTotal,
     action,
   });

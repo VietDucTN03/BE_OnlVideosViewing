@@ -15,14 +15,14 @@ const playlistSchema = new Schema(
       maxlength: 1000,
     },
     owner: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Channel",
       required: true,
     },
     videos: [
       {
         video: {
-          type: Schema.Types.ObjectId,
+          type: mongoose.Schema.Types.ObjectId,
           ref: "Video",
         },
         addedAt: {
