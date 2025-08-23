@@ -54,12 +54,12 @@ const createTransactionVnpay = asyncHandler(async (req, res) => {
 
         // 3. Tạo URL thanh toán
         const paymentUrl = await vnpay.buildPaymentUrl({
-            vnp_Amount: amount * 100,
+            vnp_Amount: amount,
             vnp_IpAddr: clientIp,
             vnp_TxnRef: orderId,
             vnp_OrderInfo: "Thanh toán đơn hàng #" + orderId,
             vnp_OrderType: "billpayment",
-            vnp_ReturnUrl: `${urlNgrok || urlServer}/api/payment/vnpay/callback-vnpay?redirect=${encodeURIComponent(urlClient)}`,
+            vnp_ReturnUrl: `${urlServer || urlNgrok}/api/payment/vnpay/callback-vnpay?redirect=${encodeURIComponent(urlClient)}`,
             vnp_BankCode: "NCB",
             vnp_CreateDate: dateFormat(new Date(), "yyyymmddHHMMss"),
             vnp_ExpireDate: dateFormat(new Date(Date.now() + 15 * 60 * 1000), "yyyyMMddHHmmss"),
@@ -80,7 +80,7 @@ const createTransactionVnpay = asyncHandler(async (req, res) => {
             }
         });
 
-        return res.status(201).json({ paymentUrl });
+        return res.status(201).json({ orderId, amount, paymentUrl });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: "Lỗi tạo URL thanh toán VNPay" });
@@ -93,9 +93,12 @@ const callbackVnpay = asyncHandler(async (req, res) => {
     const redirectUrl = req.query.redirect || urlClient;
 
     try {
-        const payment = await Payment.findOne({ transactionId: data.vnp_TxnRef });
+        const payment = await Payment.findOne({ transactionId: data.vnp_TxnRef })
+            .populate("subscriptionId")
+            .populate("userId", "_id name email");
+
         if (!payment) {
-            return res.status(404).json({ message: "Payment not found" });
+            return res.redirect(302, `${redirectUrl}?success=false&message=Payment not found`);
         }
 
         if (data.vnp_ResponseCode === "00" && data.vnp_TransactionStatus === "00") {
@@ -109,8 +112,10 @@ const callbackVnpay = asyncHandler(async (req, res) => {
             }
 
             // ✅ Cộng 1 vào totalSubscribers
-            subscription.totalSubscribers += 1;
-            await subscription.save();
+            await Subscription.findByIdAndUpdate(
+                payment.subscriptionId,
+                { $inc: { totalSubscribers: 1 } }
+            );
 
             const startDate = new Date();
             let endDate = new Date(startDate);
@@ -124,6 +129,7 @@ const callbackVnpay = asyncHandler(async (req, res) => {
             }
 
             const channel = await Channel.findOne({ owner: payment.userId });
+
             if (channel) {
                 channel.isPremium = true;
                 await channel.save();
@@ -148,7 +154,52 @@ const callbackVnpay = asyncHandler(async (req, res) => {
                 channelId: channel?._id
             });
 
-            return res.redirect(redirectUrl);
+            // ** Lấy lại Payment
+            const reducedPayment = {
+                _id: payment._id,
+                amount: payment.amount,
+                paymentMethod: payment.paymentMethod,
+                status: payment.status,
+                transactionId: payment.transactionId,
+                paymentDate: payment.paymentDate
+            };
+
+            // ** Lấy lại Subscription
+            const sub = payment.subscriptionId || {};
+            const reducedSubscription = {
+                _id: sub._id,
+                name: sub.name,
+                price: sub.price,
+                duration: sub.duration,
+                periodType: sub.periodType
+            };
+
+            const usr = payment.userId || {};
+
+            // ** Lấy lại User
+            const reducedUser = { _id: usr._id, email: usr.email, name: usr.username };
+
+            // ** Lấy lại Channel
+            const reducedChannel = channel ? {
+                _id: channel._id,
+                avatarChannel: channel.avatarChannel,
+                nameChannel: channel.nameChannel,
+                isPremium: channel.isPremium,
+                viewTotal: channel.viewTotal
+            } : {};
+
+            const payload = {
+                payment: reducedPayment,
+                subscription: reducedSubscription,
+                user: reducedUser,
+                channel: reducedChannel
+            };
+
+            console.log("Payload: ", payload);
+
+            const encoded = Buffer.from(JSON.stringify(payload)).toString("base64");
+
+            return res.redirect(302, `${redirectUrl}?success=true&data=${encoded}`);
         } else {
             payment.status = "failed";
             payment.paymentMeta.vnpayCallback = data;

@@ -14,6 +14,8 @@ const vnpayMethod = require("../../services/paymentMethod/vnpayMethod");
 
 paymentRouter.post("/momo/create-transaction-momo", verifyLoggedIn, momoMethod.createTransactionMomo);
 
+paymentRouter.get("/momo/return", momoMethod.momoReturn);
+
 paymentRouter.post("/momo/callback", momoMethod.callbackMomo);
 
 paymentRouter.post("/momo/transaction-status", momoMethod.transactionStatus);
