@@ -62,7 +62,7 @@ const getAllCommentByVideoId = asyncHandler(async (req, res) => {
     .sort(sortCondition)
     .skip(skip)
     .limit(limit)
-    .populate("postedBy", "nameChannel avatarChannel")
+    .populate("postedBy", "nameChannel avatarChannel isPremium")
     .lean();
 
   // console.log("comments: ", comments);
@@ -112,7 +112,7 @@ const getAllCommentByBlogId = asyncHandler(async (req, res) => {
     .sort(sortCondition)
     .skip(skip)
     .limit(limit)
-    .populate("postedBy", "nameChannel avatarChannel")
+    .populate("postedBy", "nameChannel avatarChannel isPremium")
     .lean();
 
   const totalComments = await Comment.countDocuments({
@@ -150,7 +150,7 @@ const getAllCommentByShortVideoId = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 }) // Mới nhất trước
     .skip(skip)
     .limit(limit)
-    .populate("postedBy", "nameChannel avatarChannel")
+    .populate("postedBy", "nameChannel avatarChannel isPremium")
     .lean();
 
   const totalComments = await Comment.countDocuments({
@@ -185,7 +185,7 @@ const getCommentRepliesByParentId = asyncHandler(async (req, res) => {
     const { id: currentParentId, level } = queue.shift();
 
     const replies = await Comment.find({ parentComment: currentParentId })
-      .populate("postedBy", "nameChannel avatarChannel")
+      .populate("postedBy", "nameChannel avatarChannel isPremium")
       .populate({
         path: "parentComment",
         populate: {

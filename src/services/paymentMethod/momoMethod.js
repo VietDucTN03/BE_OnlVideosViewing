@@ -8,6 +8,7 @@ require("dotenv").config();
 const crypto = require("crypto");
 const axios = require("axios");
 const notifyPremiumUpgrade = require("../../utils/payment/notifyPremiumUpgrade");
+const { io } = require("../../utils/socket.io/socket");
 
 // ** Payment MOMO
 const accessKeyMomo = process.env.ACCESS_KEY_MOMO;
@@ -21,6 +22,8 @@ const emailAdmin = process.env.EMAIL_NAME;
 const createTransactionMomo = asyncHandler(async (req, res) => {
     const { subscriptionId, userId } = req.body;
 
+    console.log("Data from client: ", req.body);
+
     // 1. Lấy thông tin gói subscription
     const subscription = await Subscription.findById(subscriptionId);
     if (!subscription) {
@@ -30,7 +33,7 @@ const createTransactionMomo = asyncHandler(async (req, res) => {
 
     // 2. Tạo dữ liệu gửi MoMo
     const orderInfo = `Thanh toán gói ${subscription.name}`;
-    const redirectUrl = urlClient;
+    const redirectUrl = `${urlNgrok || urlServer}/api/payment/momo/return`;
     const ipnUrl = `${urlNgrok || urlServer}/api/payment/momo/callback`;
     const requestType = "payWithMethod";
     const orderId = `${subscriptionId}-${Date.now()}`;
@@ -101,6 +104,94 @@ const createTransactionMomo = asyncHandler(async (req, res) => {
     }
 });
 
+const momoReturn = asyncHandler(async (req, res) => {
+    const q = req.query;
+
+    // verify chữ ký như cũ...
+    const raw = `accessKey=${accessKeyMomo}`
+        + `&amount=${q.amount}`
+        + `&extraData=${q.extraData || ''}`
+        + `&message=${q.message}`
+        + `&orderId=${q.orderId}`
+        + `&orderInfo=${q.orderInfo}`
+        + `&orderType=${q.orderType}`
+        + `&partnerCode=${q.partnerCode}`
+        + `&payType=${q.payType}`
+        + `&requestId=${q.requestId}`
+        + `&responseTime=${q.responseTime}`
+        + `&resultCode=${q.resultCode}`
+        + `&transId=${q.transId}`;
+
+    const sig = crypto.createHmac('sha256', secretKeyMomo).update(raw).digest('hex');
+    const ok = sig === q.signature;
+    const success = ok && Number(q.resultCode) === 0;
+
+    if (!success) {
+        return res.redirect(302, `${urlClient}?success=false`);
+    }
+
+    // ** Lấy lại Payment
+    const payment = await Payment.findOne({ transactionId: q.orderId })
+        .populate('subscriptionId')
+        .populate('userId', '_id name email')
+        .lean();
+
+    if (!payment) {
+        return res.redirect(302, `${urlClient}?success=false&message=payment_not_found`);
+    }
+
+    // ** Lấy thêm Channel
+    const channel = await Channel.findOne({ owner: payment.userId }).lean();
+
+    const reducedPayment = {
+        _id: payment._id,
+        amount: payment.amount,
+        paymentMethod: payment.paymentMethod,
+        status: payment.status,
+        transactionId: payment.transactionId,
+        paymentDate: payment.paymentDate
+    };
+
+    const sub = payment.subscriptionId || {};
+    const reducedSubscription = {
+        _id: sub._id,
+        name: sub.name,
+        price: sub.price,
+        duration: sub.duration,
+        periodType: sub.periodType
+    };
+
+    const usr = payment.userId || {};
+
+    console.log("User: ", usr);
+
+    const reducedUser = { _id: usr._id, email: usr.email, name: usr.username };
+
+    const reducedChannel = channel ? {
+        _id: channel._id,
+        avatarChannel: channel.avatarChannel,
+        nameChannel: channel.nameChannel,
+        isPremium: channel.isPremium,
+        viewTotal: channel.viewTotal
+    } : null;
+
+    const payload = {
+        payment: reducedPayment,
+        subscription: reducedSubscription,
+        user: reducedUser,
+        channel: reducedChannel
+    };
+
+    console.log("Payload: ", payload);
+
+    // Mã hóa an toàn URL (base64url)
+    const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+
+    console.log("Encoded: ", encoded);
+
+    return res.redirect(302, `${urlClient}?success=true&data=${encoded}`);
+});
+
 const callbackMomo = asyncHandler(async (req, res) => {
     const data = req.body;
     console.log("Data callbacked: ", data);
@@ -122,8 +213,10 @@ const callbackMomo = asyncHandler(async (req, res) => {
             }
 
             // ✅ Cộng 1 vào totalSubscribers
-            subscription.totalSubscribers += 1;
-            await subscription.save();
+            await Subscription.findByIdAndUpdate(
+                payment.subscriptionId,
+                { $inc: { totalSubscribers: 1 } }
+            );
 
             const startDate = new Date();
             let endDate = new Date(startDate);
@@ -211,6 +304,7 @@ const transactionStatus = asyncHandler(async (req, res) => {
 
 module.exports = {
     createTransactionMomo,
+    momoReturn,
     callbackMomo,
     transactionStatus,
 };

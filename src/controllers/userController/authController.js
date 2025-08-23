@@ -85,6 +85,7 @@ const loginSuccess = async (req, res) => {
           description: user.channel?.description,
           avatarChannel: user.channel?.avatarChannel,
           bannerChannel: user.channel?.bannerChannel,
+          isPremium: user.channel?.isPremium,
           subscribersCount: user.channel?.subscribersCount,
           contentTotal: user.channel?.contentTotal?.total,
           viewTotal: user.channel?.viewTotal,

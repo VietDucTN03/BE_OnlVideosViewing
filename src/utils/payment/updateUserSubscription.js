@@ -36,7 +36,7 @@ const updateUserSubscription = async ({ userId, subscriptionName, endDate, type 
                     Hãy nâng cấp trải nghiệm Metube của bạn bằng cách đăng ký gói Premium.
                 </p>
                 <div style="text-align:center;margin:30px 0;">
-                    <a href="${urlClient}/payment" style="background:#14b8a6;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;display:inline-block;font-size:16px;">
+                    <a href="${urlClient}/premium" style="background:#14b8a6;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;display:inline-block;font-size:16px;">
                         ✉️ Nâng cấp ngay.
                     </a>
                 </div>

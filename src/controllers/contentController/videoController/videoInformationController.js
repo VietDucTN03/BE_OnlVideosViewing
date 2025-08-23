@@ -655,8 +655,6 @@ const getVideoInfo = asyncHandler(async (req, res) => {
       )
       .populate("playList", "titlePlaylist");
 
-    console.log("video: ", video);
-
     if (!video) return res.status(404).json({ message: "Video not found." });
     res.json(video);
   } catch (error) {
