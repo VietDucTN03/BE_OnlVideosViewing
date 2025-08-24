@@ -30,9 +30,8 @@ const getVideo = asyncHandler(async (req, res) => {
 
     // 👉 Tạo tên file duy nhất để lưu tạm
     const ext = path.extname(videoFile.name);
-    const uniqueFileName = `${
-      path.parse(videoFile.name).name
-    }_${uuidv4()}${ext}`;
+    const uniqueFileName = `${path.parse(videoFile.name).name
+      }_${uuidv4()}${ext}`;
     const tempVideoPath = path.join(tempFolderPath, uniqueFileName);
 
     await videoFile.mv(tempVideoPath);
@@ -82,9 +81,8 @@ const getListVideoSliced = asyncHandler(async (req, res) => {
   for (let i = 0; i < totalChunks; i++) {
     const startTime = i * chunkDuration;
     const roundedDuration = Math.round(chunkDuration);
-    const outputFileName = `${videoBaseName}_part_${
-      i + 1
-    }_${roundedDuration}s.mp4`;
+    const outputFileName = `${videoBaseName}_part_${i + 1
+      }_${roundedDuration}s.mp4`;
     const outputPath = path.join(tempFolderPath, outputFileName);
 
     const ffmpegCommand = `"${ffmpegPath}" -i "${videoPath}" -ss ${startTime} -t ${chunkDuration} -c copy "${outputPath}"`;
@@ -142,7 +140,7 @@ const createVideo = asyncHandler(async (req, res, next) => {
     channelId,
     duration,
     isPrivate,
-    isPremiumOnly, 
+    isPremiumOnly,
   } = req.body;
 
   // Kiểm tra hợp lệ
@@ -281,6 +279,7 @@ const cleanupFolder = asyncHandler(async (req, res) => {
 });
 
 //* Viewing Video
+const combinePromises = {};
 let inUse = {};
 const cleanupTimeouts = {};
 
@@ -358,84 +357,188 @@ const combineCloudVideosById = asyncHandler(async (req, res) => {
 
   try {
     const videoData = await Video.findById(videoId);
-    if (!videoData || !Array.isArray(videoData.url)) {
-      return res
-        .status(404)
-        .json({ message: "Không tìm thấy video hoặc URL không hợp lệ" });
+    if (!videoData || !Array.isArray(videoData.url) || videoData.url.length === 0) {
+      return res.status(404).json({ message: "Không tìm thấy video hoặc URL không hợp lệ" });
     }
 
-    const timestamp = Date.now();
-    const folderName = `combine_${videoId}_${timestamp}`;
+    // * Tạo thư mục cho môi video.
+    const folderName = `combine_${videoId}`;
     const tempFolder = path.join(__dirname, "../../../saves", folderName);
     const listFilePath = path.join(tempFolder, "input.txt");
-    const outputFilePath = path.join(tempFolder, `combined_${videoId}.mp4`);
+    const outputFileName = `combined_${videoId}.mp4`;
+    const outputFilePath = path.join(tempFolder, outputFileName);
 
-    await fs.mkdir(tempFolder, { recursive: true });
-
-    const fileListContent = videoData.url
-      .map((url) => `file '${url}'`)
-      .join("\n");
-    await fs.writeFile(listFilePath, fileListContent);
-
-    const ffmpegCommand = `"${ffmpegPath}" -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls" -i "${listFilePath}" -c copy "${outputFilePath}"`;
-    await execPromise(ffmpegCommand);
-
-    if (!fsSync.existsSync(outputFilePath)) {
-      return res
-        .status(500)
-        .json({ message: "Tệp video chưa được tạo thành công." });
+    // * Nếu đầu ra đã tồn tại, trả về ngay lập tức.
+    if (fsSync.existsSync(outputFilePath)) {
+      return res.status(200).json({
+        message: "Gộp video sẵn sàng (reused)",
+        videoPath: outputFilePath,
+        folderName,
+        fileName: outputFileName,
+      });
     }
 
-    // ✅ Trả về đường dẫn tạm để FE gọi tiếp để stream
-    return res.status(200).json({
-      message: "Gộp video thành công",
-      videoPath: outputFilePath,
-      folderName,
-      fileName: `combined_${videoId}.mp4`,
-    });
+    if (combinePromises[videoId]) {
+      try {
+        await combinePromises[videoId];
+        if (fsSync.existsSync(outputFilePath)) {
+          return res.status(200).json({
+            message: "Gộp video sẵn sàng (await reused)",
+            videoPath: outputFilePath,
+            folderName,
+            fileName: outputFileName,
+          });
+        } else {
+          return res.status(500).json({ message: "Gộp video thất bại ở tiến trình trước" });
+        }
+      } catch (err) {
+        return res.status(500).json({ message: "Gộp video thất bại", error: err.message });
+      }
+    }
+
+    // * Tạo một promise cho cùng videoId và lưu trữ nó để các yêu cầu đồng thời chia sẻ cùng một công việc.
+    const runCombineJob = async () => {
+      await fs.mkdir(tempFolder, { recursive: true });
+      const fileListContent = videoData.url.map((url) => `file '${url}'`).join("\n");
+      await fs.writeFile(listFilePath, fileListContent);
+
+      const ffmpegCommand = `"${ffmpegPath}" -f concat -safe 0 -protocol_whitelist "file,http,https,tcp,tls" -i "${listFilePath}" -c copy "${outputFilePath}"`;
+
+      await execPromise(ffmpegCommand);
+
+      if (!fsSync.existsSync(outputFilePath)) {
+        throw new Error("Tệp video chưa được tạo thành công.");
+      }
+
+      try { await fs.unlink(listFilePath); } catch (_) { }
+    }
+
+    combinePromises[videoId] = runCombineJob();
+
+    try {
+      await combinePromises[videoId];
+      return res.status(200).json({
+        message: "Gộp video thành công",
+        videoPath: outputFilePath,
+        folderName,
+        fileName: outputFileName,
+      });
+    } catch (err) {
+      return res.status(500).json({ message: "Lỗi khi nối video", error: err.message });
+    } finally {
+      delete combinePromises[videoId];
+    }
+
   } catch (err) {
     console.error("❌ Lỗi khi nối video từ URL:", err);
     res.status(500).json({ message: "Lỗi khi nối video", error: err.message });
   }
 });
 
+const cleaningPaths = new Set();  // * Tạo danh sách các videoPath đang được cleanup để tránh xử lý trùng.
+
 const handleCleanup = async (videoPath) => {
+
+  // ** Tránh chạy đồng thời cho cùng videoPath
+  if (cleaningPaths.has(videoPath)) return;
+  cleaningPaths.add(videoPath);
+
   try {
+    // ? Hàm ép Node.js chạy Garbage Collector thủ công (thu gom bộ nhớ).
     global.gc?.();
 
-    await fs.access(videoPath);
+    // ? Chờ một chút để các luồng đóng lại (tùy chọn).
+    await new Promise((res) => setTimeout(res, 1000));
 
-    await new Promise((res) => setTimeout(res, 1000)); // Chờ 1s
-
-    await fs.rm(videoPath, { force: true });
-    console.log("🧹 Đã xoá file:", videoPath);
+    // * Thực hiện lệnh xóa (force là bắt buộc).
+    try {
+      await fs.rm(videoPath, { force: true });
+      console.log("🧹 Đã xoá file (if existed):", videoPath);
+    } catch (err) {
+      console.warn("⚠️ Lỗi khi xoá file (rm):", err.message);
+    }
 
     const folderPath = path.dirname(videoPath);
-    const files = await fs.readdir(folderPath);
-
     const inputFilePath = path.join(folderPath, "input.txt");
 
     try {
-      await fs.access(inputFilePath); // kiểm tra tồn tại
-      await fs.unlink(inputFilePath);
-      console.log("🧹 Đã xoá input.txt");
-
-      if (files.length === 0) {
-        try {
-          await fs.rmdir(folderPath);
-          console.log("🧹 Đã xoá thư mục:", folderPath);
-        } catch (err) {
-          console.warn("⚠️ Không thể xoá thư mục:", err.message);
-        }
+      // * Kiểm tra xem input.txt có tồn tại không = existsSync.
+      if (fsSync.existsSync(inputFilePath)) {
+        await fs.unlink(inputFilePath);
+        console.log("🧹 Đã xoá input.txt");
       }
     } catch (err) {
-      console.warn("⚠️ Lỗi khi xoá input.txt hoặc thư mục:", err.message);
+      console.warn("⚠️ Lỗi khi xoá input.txt:", err.message);
+    }
+
+    try {
+      const files = await fs.readdir(folderPath);   // * Đọc danh sách file và thư mục con bên trong một thư mục.
+
+      if (!files || files.length === 0) {
+        await fs.rmdir(folderPath);
+        console.log("🧹 Đã xoá thư mục rỗng:", folderPath);
+      } else {
+        console.log("Thư mục vẫn còn file, không xóa:", folderPath);
+      }
+    } catch (err) {
+      // * ENOENT = Error NO ENTry (không có mục nhập).
+      if (err.code && err.code === "ENOENT") {
+        console.log("Thư mục bị xóa rồi, bỏ qua:", folderPath);
+      } else {
+        console.warn("⚠️ Lỗi khi xử lý folder:", err.message);
+      }
     }
   } catch (err) {
-    console.warn("⚠️ Lỗi khi xoá file:", err.message);
+    console.warn("⚠️ Lỗi xử lý cleanup tổng quát:", err.message);
+  } finally {
+    // * Đảm bảo luôn dọn dẹp
+    cleaningPaths.delete(videoPath);
+    if (cleanupTimeouts[videoPath]) {
+      clearTimeout(cleanupTimeouts[videoPath]);
+      delete cleanupTimeouts[videoPath];
+    }
   }
+};
 
-  delete cleanupTimeouts[videoPath];
+const increaseRef = (videoPath) => {
+  inUse[videoPath] = (inUse[videoPath] || 0) + 1;
+
+  // ** Hủy bỏ việc dọn dẹp theo lịch trình nếu có.
+  if (cleanupTimeouts[videoPath]) {
+    clearTimeout(cleanupTimeouts[videoPath]);
+    delete cleanupTimeouts[videoPath];
+  }
+};
+
+const decreaseRef = (videoPath) => {
+  inUse[videoPath] = Math.max(0, (inUse[videoPath] || 1) - 1);
+  if (inUse[videoPath] === 0 && !cleanupTimeouts[videoPath]) {
+    cleanupTimeouts[videoPath] = setTimeout(() => {
+      if (!inUse[videoPath] || inUse[videoPath] === 0) {
+        handleCleanup(videoPath);
+      }
+    }, 150 * 1000);
+  }
+};
+
+// * Đảm bảo đường dẫn đã giải quyết nằm bên trong baseDir
+const isPathInside = (parent, child) => {
+  // * Tính đường dẫn tương đối từ parent đến child
+  const relative = path.relative(parent, child);
+
+  // return !!relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+
+  // ? Nếu cùng một đường dẫn -> không tính là "nằm bên trong"
+  if (relative === "") return false;
+
+  // ? Nếu bắt đầu bằng ".." -> nghĩa là child nằm ngoài parent
+  if (relative.startsWith("..")) return false;
+
+  // ? Nếu là đường dẫn tuyệt đối -> cũng không hợp lệ
+  if (path.isAbsolute(relative)) return false;
+
+  // ? Ngược lại thì chắc chắn child nằm trong parent
+  return true;
 };
 
 const videoStreaming = asyncHandler(async (req, res) => {
@@ -444,134 +547,117 @@ const videoStreaming = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Thiếu folderName hoặc fileName" });
   }
 
-  const videoPath = path.join(__dirname, "../../../saves", folderName, fileName);
+  try {
+    const savesDir = path.join(__dirname, "../../../saves");
+    const videoPath = path.join(savesDir, folderName, fileName);
 
-  if (!fsSync.existsSync(videoPath)) {
-    return res.status(404).json({ message: "Không tìm thấy video" });
-  }
+    const normalized = path.normalize(videoPath);
+    if (!isPathInside(savesDir, normalized) && normalized !== path.join(savesDir, folderName, fileName)) {
+      console.warn("⚠️ Attempted path traversal:", videoPath);
+      return res.status(400).json({ message: "Invalid file path" });
+    }
 
-  const stat = await fs.stat(videoPath);
-  const fileSize = stat.size;
-  const range = req.headers.range;
+    if (!fsSync.existsSync(videoPath)) {
+      return res.status(404).json({ message: "Không tìm thấy video" });
+    }
 
-  if (!range) {
+    const stat = await fs.stat(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    // * Tăng số lượng tham chiếu nếu có người xem.
+    increaseRef(videoPath);
+
+    // * Xử lý luồng toàn tập tin (không có phạm vi).
+    if (!range) {
+      const headers = {
+        "Content-Length": fileSize,
+        "Content-Type": "video/mp4",
+      };
+      res.writeHead(200, headers);
+      const stream = fsSync.createReadStream(videoPath);
+
+      // * Dọn dẹp sự kiện.
+      const cleanupAndDecrease = () => {
+        try { stream.destroy(); } catch (e) { }
+        decreaseRef(videoPath);
+      };
+
+      stream.pipe(res);
+
+      req.on("abort", () => {
+        console.log("🚨 Video stream aborted by client for:", videoPath);
+        cleanupAndDecrease();
+      });
+
+      stream.on("end", () => {
+        console.log("✅ Stream ended for:", videoPath);
+        cleanupAndDecrease();
+      });
+
+      res.on("close", () => {
+        // client closed the connection
+        console.log("📤 Response closed for:", videoPath);
+        cleanupAndDecrease();
+      });
+
+      return;
+    }
+
+    const CHUNK_SIZE = 10 ** 6; // 1MB
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK_SIZE - 1, fileSize - 1);
+
+    if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
+      // bad range: respond 416
+      res.writeHead(416, { "Content-Range": `bytes */${fileSize}` });
+      decreaseRef(videoPath);
+      return res.end();
+    }
+
+    const contentLength = end - start + 1;
     const headers = {
-      "Content-Length": fileSize,
+      "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": contentLength,
       "Content-Type": "video/mp4",
     };
-    res.writeHead(200, headers);
-    const stream = fsSync.createReadStream(videoPath);
+
+    res.writeHead(206, headers);
+    const stream = fsSync.createReadStream(videoPath, { start, end });
+
+    const cleanupAndDecreaseRange = () => {
+      try { stream.destroy(); } catch (e) { }
+      decreaseRef(videoPath);
+    };
+
     stream.pipe(res);
 
-    req.on("abort", () => {
-      console.log("🚨 Video stream aborted by client for:", videoPath);
-      stream.destroy();
-      inUse[videoPath] = false;
-      cleanupTimeouts[videoPath] = setTimeout(async () => {
-        if (!inUse[videoPath]) {
-          handleCleanup(videoPath);
-        }
-      }, 300 * 1000);
-    });
-
     stream.on("end", () => {
-      console.log("✅ Stream ended for:", videoPath);
-      inUse[videoPath] = false;
-
-      // Đảm bảo setTimeout không bị bỏ qua
-      if (!cleanupTimeouts[videoPath]) {
-        cleanupTimeouts[videoPath] = setTimeout(() => {
-          if (!inUse[videoPath]) {
-            handleCleanup(videoPath);
-          }
-        }, 150 * 1000); // Dọn sau 15s
-      }
+      console.log("✅ Partial stream ended for:", videoPath, `range ${start}-${end}`);
+      cleanupAndDecreaseRange();
     });
 
     res.on("close", () => {
-      console.log("📤 Response closed for:", videoPath);
-      stream.destroy();
-      inUse[videoPath] = false;
-
-      if (!cleanupTimeouts[videoPath]) {
-        cleanupTimeouts[videoPath] = setTimeout(() => {
-          if (!inUse[videoPath]) {
-            handleCleanup(videoPath);
-          }
-        }, 150 * 1000);
-      }
+      console.log("📤 Response closed for (partial):", videoPath);
+      cleanupAndDecreaseRange();
     });
 
-    return;
-  }
+    req.on("abort", () => {
+      console.log("🚨 Video stream aborted by client for (partial):", videoPath);
+      cleanupAndDecreaseRange();
+    });
+  } catch (err) {
+    console.error("❌ Lỗi streaming video:", err);
+    try { decreaseRef && decreaseRef(); } catch (_) { }   // ? Không xài error.
 
-  const CHUNK_SIZE = 10 ** 6;
-  const parts = range.replace(/bytes=/, "").split("-");
-  const start = parseInt(parts[0], 10);
-  const end = parts[1]
-    ? parseInt(parts[1], 10)
-    : Math.min(start + CHUNK_SIZE - 1, fileSize - 1);
-
-  const contentLength = end - start + 1;
-
-  const headers = {
-    "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-    "Accept-Ranges": "bytes",
-    "Content-Length": contentLength,
-    "Content-Type": "video/mp4",
-  };
-
-  console.log(headers);
-
-  inUse[videoPath] = true;
-
-  if (cleanupTimeouts[videoPath]) {
-    clearTimeout(cleanupTimeouts[videoPath]);
-    delete cleanupTimeouts[videoPath];
-  }
-
-  res.writeHead(206, headers);
-  const stream = fsSync.createReadStream(videoPath, { start, end });
-  stream.pipe(res);
-
-  stream.on("end", () => {
-    console.log("✅ Stream ended for:", videoPath);
-    inUse[videoPath] = false;
-
-    // Đảm bảo setTimeout không bị bỏ qua
-    if (!cleanupTimeouts[videoPath]) {
-      cleanupTimeouts[videoPath] = setTimeout(() => {
-        if (!inUse[videoPath]) {
-          handleCleanup(videoPath);
-        }
-      }, 150 * 1000); // Dọn sau 15s
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Lỗi server khi streaming", error: err.message });
+    } else {
+      res.end();
     }
-  });
-
-  res.on("close", () => {
-    console.log("📤 Response closed for:", videoPath);
-    stream.destroy();
-    inUse[videoPath] = false;
-
-    if (!cleanupTimeouts[videoPath]) {
-      cleanupTimeouts[videoPath] = setTimeout(() => {
-        if (!inUse[videoPath]) {
-          handleCleanup(videoPath);
-        }
-      }, 150 * 1000);
-    }
-  });
-
-  req.on("abort", () => {
-    console.log("🚨 Video stream aborted by client for:", videoPath);
-    stream.destroy();
-    inUse[videoPath] = false;
-    cleanupTimeouts[videoPath] = setTimeout(async () => {
-      if (!inUse[videoPath]) {
-        handleCleanup(videoPath);
-      }
-    }, 300 * 1000);
-  });
+  }
 });
 
 module.exports = {
