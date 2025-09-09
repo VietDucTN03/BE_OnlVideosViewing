@@ -112,31 +112,27 @@ const unsubscribeFromChannel = async (req, res) => {
   const { userId } = req.body;
 
   try {
-    const channel = await Channel.findById(channelId);
-    const sender = await Channel.findById(userId);
+    if (channelId.toString() === userId.toString()) {
+      return res.status(200).json({ message: "You cannot unsubscribe from your own channel." });
+    }
 
+    const channel = await Channel.findById(channelId);
     if (!channel) {
       return res.status(404).json({ message: "Channel not found, please try again." });
     }
 
-    if (!channel.subscribers || !channel.subscribers.includes(userId)) {
-      return res
-        .status(400)
-        .json({ message: "User is not subscribed to this channel." });
+    if (!channel.subscribers.includes(userId)) {
+      return res.status(200).json({ message: "User is not subscribed to this channel." });
     }
 
-    // Remove userId from subscribers array
-    channel.subscribers = channel.subscribers.filter(
-      (subscriber) => subscriber.toString() !== userId.toString()
-    );
-    channel.subscribersCount -= 1;
+    await Channel.findByIdAndUpdate(channelId, {
+      $pull: { subscribers: userId },
+      $inc: { subscribersCount: -1 },
+    });
 
-    sender.channelsSubscribed = sender.channelsSubscribed.filter(
-      (id) => id.toString() !== channelId.toString()
-    );
-
-    await channel.save();
-    await sender.save();
+    await Channel.findByIdAndUpdate(userId, {
+      $pull: { channelsSubscribed: channelId },
+    });
 
     console.log("👉 Successfully unsubscribed from the channel");
 

@@ -4,6 +4,57 @@ const Payment = require("../../../models/payment/payment");
 const UserSubscription = require("../../../models/payment/userSubscription");
 const mongoose = require("mongoose");
 
+const getSubscriptionSummary = asyncHandler(async (req, res) => {
+  try {
+    const totalPlans = await Subscription.countDocuments();
+    const activePlans = await Subscription.countDocuments({ isActive: true });
+    const inactivePlans = await Subscription.countDocuments({ isActive: false });
+
+    res.status(200).json([
+      { key: "total", value: totalPlans, title: "Total Plans" },
+      { key: "active", value: activePlans, title: "Active Plans" },
+      { key: "inactive", value: inactivePlans, title: "Inactive Plans" },
+    ]);
+  } catch (error) {
+    console.error("❌ Error getting subscription summary:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get subscription summary",
+      error: error.message,
+    });
+  }
+});
+
+const getTopSubscriptions = asyncHandler(async (req, res) => {
+  try {
+    const topSubscriptions = await Subscription.find()
+      .sort({ totalSubscribers: -1 })
+      .limit(3)
+      .lean();
+
+    if (topSubscriptions.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No subscription plans found.",
+        topSubscriptions: [],
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Top 3 subscription plans fetched successfully",
+      topSubscriptions,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching top subscriptions:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch top subscriptions",
+      error: error.message,
+    });
+  }
+});
+
 const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
   const {
     page = 1,
@@ -49,10 +100,12 @@ const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
     query.periodType = periodType;
   }
 
-  const filteredTotal = await Subscription.countDocuments(query);
-  const totalPages = Math.ceil(filteredTotal / limit);
+  totalPlans = await Subscription.countDocuments(query);
+
+  const totalPages = Math.ceil(totalPlans / limit);
 
   try {
+    const filteredTotal = await Subscription.countDocuments(query);
     const plans = await Subscription.find(query)
       .sort(sortCondition)
       .skip(skip)
@@ -72,6 +125,8 @@ const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
         hasMore: false,
         keyword,
         sort,
+        activeStatus,
+        periodType,
         message: `No subscription plans found matching the keyword "${keyword}".`,
       });
     }
@@ -88,6 +143,8 @@ const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
         hasMore: false,
         keyword,
         sort,
+        activeStatus,
+        periodType,
         message: "No subscription plans available in the system.",
       });
     }
@@ -103,6 +160,8 @@ const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
       hasMore,
       keyword,
       sort,
+      activeStatus,
+      periodType,
     });
   } catch (error) {
     console.error("❌ Error fetching subscription plans:", error);
@@ -167,9 +226,54 @@ const createSubscriptionPlan = asyncHandler(async (req, res) => {
   }
 });
 
+const getSubscriptionById = asyncHandler(async (req, res) => {
+  try {
+    const { subscriptionId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(subscriptionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid subscription ID format.",
+      });
+    }
+
+    // loại bỏ totalSubscribers khi query
+    const subscription = await Subscription.findById(subscriptionId)
+      .lean();
+
+    if (!subscription) {
+      return res.status(404).json({
+        success: false,
+        message: "Subscription plan not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Subscription plan fetched successfully",
+      subscription,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching subscription by id:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch subscription plan",
+      error: error.message,
+    });
+  }
+});
+
 const updateSubscriptionPlan = asyncHandler(async (req, res) => {
   try {
     const { subscriptionId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(subscriptionId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid subscription ID format.",
+      });
+    };
+
     const { name, description, price, duration, periodType, features, isActive } = req.body;
 
     // Tìm gói cần update
@@ -295,8 +399,11 @@ const deleteSubscriptionPlan = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-    getAllSubscriptionPlans,
-    createSubscriptionPlan,
-    updateSubscriptionPlan,
-    deleteSubscriptionPlan,
+  getSubscriptionSummary,
+  getTopSubscriptions,
+  getAllSubscriptionPlans,
+  createSubscriptionPlan,
+  getSubscriptionById,
+  updateSubscriptionPlan,
+  deleteSubscriptionPlan,
 };

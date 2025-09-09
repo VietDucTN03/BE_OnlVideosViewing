@@ -29,7 +29,7 @@ const getAllShortVideos = asyncHandler(async (req, res) => {
   } = req.query;
 
   const pageNum = parseInt(page);
-  const limit = 5;
+  const limit = 2;
   const skip = (pageNum - 1) * limit;
 
   const sortOptions = {
@@ -46,7 +46,8 @@ const getAllShortVideos = asyncHandler(async (req, res) => {
 
   const query = {};
 
-  //* Search theo title hoặc nameChannel
+  let totalShorts = await ShortVideo.countDocuments(query);
+
   if (keyword) {
     const matchedChannels = await Channel.find({
       nameChannel: { $regex: keyword, $options: "i" },
@@ -58,7 +59,6 @@ const getAllShortVideos = asyncHandler(async (req, res) => {
     ];
   }
 
-  //* visibilityStatus
   if (["public", "private"].includes(visibilityStatus)) {
     if (visibilityStatus === "public") {
       query.isPrivate = false;
@@ -67,7 +67,6 @@ const getAllShortVideos = asyncHandler(async (req, res) => {
     }
   }
 
-  //* banStatus
   if (["banned", "notBanned"].includes(banStatus)) {
     if (banStatus === "banned") {
       query.isBanned = true;
@@ -76,52 +75,95 @@ const getAllShortVideos = asyncHandler(async (req, res) => {
     }
   }
 
-  //* violationStatus
   if (["normal", "warning", "banned"].includes(violationStatus)) {
     query.violationStatus = violationStatus;
   }
 
-  const totalShorts = await ShortVideo.countDocuments(query);
+  totalShorts = await ShortVideo.countDocuments(query);
 
-  const shorts = await ShortVideo.find(query)
-    .populate({
-      path: "uploader",
-      select: "nameChannel avatarChannel",
-    })
-    .sort(sortCondition)
-    .skip(skip)
-    .limit(limit)
-    .lean();
+  const totalPages = Math.ceil(totalShorts / limit);
 
-  const result = shorts.map((short) => ({
-    id: short._id,
-    title: short.title,
-    thumbnail: short.thumbnail,
-    views: short.views,
-    like: short.statusTotal?.like || 0,
-    // dislike: short.statusTotal?.dislike || 0,
-    comments: short.commentTotal,
-    reportReviews: short.reportReviewCount,
-    isPrivate: short.isPrivate,
-    violationStatus: short.violationStatus,
-    isBanned: short.isBanned,
-    createdAt: short.createdAt,
-    channelName: short.uploader?.nameChannel || "",
-    channelAvatar: short.uploader?.avatarChannel || "",
-  }));
+  try {
+    const filteredTotal = await ShortVideo.countDocuments(query);
 
-  res.status(200).json({
-    shorts: result,
-    totalShorts,
-    hasMore: skip + limit < totalShorts,
-    // page: pageNum,
-    limit,
-    sort,
-    keyword,
-    visibilityStatus,
-    banStatus,
-    violationStatus,
-  });
+    const shorts = await ShortVideo.find(query)
+      .populate({
+        path: "uploader",
+        select: "nameChannel avatarChannel",
+      })
+      .sort(sortCondition)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const result = shorts.map((short) => ({
+      id: short._id,
+      title: short.title,
+      thumbnail: short.thumbnail,
+      views: short.views,
+      like: short.statusTotal?.like || 0,
+      // dislike: short.statusTotal?.dislike || 0,
+      comments: short.commentTotal,
+      reportReviews: short.reportReviewCount,
+      isPrivate: short.isPrivate,
+      violationStatus: short.violationStatus,
+      isBanned: short.isBanned,
+      createdAt: short.createdAt,
+      channelName: short.uploader?.nameChannel || "",
+      channelAvatar: short.uploader?.avatarChannel || "",
+    }));
+
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        shorts: result,
+        totalShorts: 0,
+        totalPages: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        visibilityStatus,
+        banStatus,
+        violationStatus,
+        message: `No shorts found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalShorts === 0) {
+      return res.status(200).json({
+        shorts: result,
+        totalShorts: 0,
+        totalPages: 0,
+        page: 1,
+        limit,
+        hasMore: false,
+        keyword,
+        sort,
+        visibilityStatus,
+        banStatus,
+        violationStatus,
+        message: "No shorts found.",
+      });
+    }
+
+    res.status(200).json({
+      shorts: result,
+      totalShorts,
+      totalPages,
+      hasMore: skip + limit < totalShorts,
+      page: pageNum,
+      limit,
+      sort,
+      keyword,
+      visibilityStatus,
+      banStatus,
+      violationStatus,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
 });
 
 const getShortVideoById = asyncHandler(async (req, res) => {

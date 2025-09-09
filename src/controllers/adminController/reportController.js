@@ -26,11 +26,11 @@ const getReportReviewStats = asyncHandler(async (req, res) => {
 });
 
 const getAllReportReviews = asyncHandler(async (req, res) => {
-    const { 
-        page = 1, 
-        contentType, 
-        status, 
-        sort = "newest", 
+    const {
+        page = 1,
+        contentType,
+        status,
+        sort = "newest",
         resolved,
         reason
     } = req.query;
@@ -39,20 +39,18 @@ const getAllReportReviews = asyncHandler(async (req, res) => {
     const limit = 5;
     const skip = (pageNum - 1) * limit;
 
-    // Query điều kiện
     const query = {};
 
-    // Filter contentType
+    let totalReports = await ReportReview.countDocuments(query);
+
     if (contentType && contentType !== "all" && ["Video", "ShortVideo", "Blog"].includes(contentType)) {
         query.contentType = contentType;
     }
 
-    // Filter resolvedResult
     if (status && status !== "all" && ["valid", "invalid", "pending"].includes(status)) {
         query.resolvedResult = status;
     }
 
-    // Filter isResolved
     if (resolved && resolved !== "all") {
         if (resolved === "resolved") {
             query.isResolved = true;
@@ -61,52 +59,74 @@ const getAllReportReviews = asyncHandler(async (req, res) => {
         }
     }
 
-    // Filter reason
     if (reason && reason !== "all") {
         query.reason = reason;
     }
 
-    // Sắp xếp
     const sortOptions = {
         newest: { createdAt: -1 },
         oldest: { createdAt: 1 }
     };
     const sortCondition = sortOptions[sort] || sortOptions.newest;
 
-    // Đếm tổng
-    const totalReports = await ReportReview.countDocuments(query);
+    totalReports = await ReportReview.countDocuments(query);
 
-    // Lấy dữ liệu
-    const reports = await ReportReview.find(query)
-        .sort(sortCondition)
-        .skip(skip)
-        .limit(limit)
-        .populate("reporters", "nameChannel avatarChannel")
-        .populate({
-            path: "reportedChannel",
-            select: "nameChannel avatarChannel violationStatus reportCount owner",
-            populate: {
-                path: "owner",
-                select: "email typeLogin isBlocked"
-            }
-        })
-        .lean();
+    const totalPages = Math.ceil(totalReports / limit);
 
-    // Kiểm tra còn trang sau không
-    const hasMore = skip + limit < totalReports;
+    try {
+        const filteredTotal = await ReportReview.countDocuments(query);
 
-    res.status(200).json({
-        reports,
-        totalReports,
-        hasMore,
-        page: pageNum,
-        limit,
-        contentType: contentType || "all",
-        status: status || "all",
-        sort: sort || "newest",
-        resolved: resolved || "all",
-        reason: reason || "all",
-    });
+        const reports = await ReportReview.find(query)
+            .sort(sortCondition)
+            .skip(skip)
+            .limit(limit)
+            .populate("reporters", "nameChannel avatarChannel")
+            .populate({
+                path: "reportedChannel",
+                select: "nameChannel avatarChannel violationStatus reportCount owner",
+                populate: {
+                    path: "owner",
+                    select: "email typeLogin isBlocked"
+                }
+            })
+            .lean();
+
+        const hasMore = skip + limit < totalReports;
+
+        if (filteredTotal === 0) {
+            return res.status(200).json({
+                reports: [],
+                totalReports: 0,
+                totalPages: 0,
+                hasMore: false,
+                page: pageNum,
+                limit,
+                contentType: contentType || "all",
+                status: status || "all",
+                sort: sort || "newest",
+                resolved: resolved || "all",
+                reason: reason || "all",
+                message: "No reports found."
+            });
+        }
+
+        res.status(200).json({
+            reports,
+            totalReports,
+            totalPages,
+            hasMore,
+            page: pageNum,
+            limit,
+            contentType: contentType || "all",
+            status: status || "all",
+            sort: sort || "newest",
+            resolved: resolved || "all",
+            reason: reason || "all",
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Internal server error", error: error.message });
+    }
 });
 
 const getReportReviewById = asyncHandler(async (req, res) => {
@@ -229,75 +249,75 @@ const getReportReviewById = asyncHandler(async (req, res) => {
 // });
 
 const resolveReportReview = asyncHandler(async (req, res) => {
-  const { reportId } = req.params;
-  const { result } = req.body;
+    const { reportId } = req.params;
+    const { result } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(reportId)) {
-    return res.status(400).json({ message: "Invalid report ID" });
-  }
-
-  if (!["valid", "invalid"].includes(result)) {
-    return res.status(400).json({ message: "Kết quả phải là 'valid' hoặc 'invalid'" });
-  }
-
-  const report = await ReportReview.findById(reportId);
-  if (!report) {
-    return res.status(404).json({ message: "Report không tồn tại" });
-  }
-
-  if (report.resolvedResult !== "pending") {
-    return res.status(400).json({ message: "Report đã được xử lý trước đó" });
-  }
-
-  let Model;
-  let uploaderField;
-  switch (report.contentType) {
-    case "Video":
-      Model = Video;
-      uploaderField = "uploader";
-      break;
-    case "ShortVideo":
-      Model = ShortVideo;
-      uploaderField = "uploader";
-      break;
-    case "Blog":
-      Model = Blog;
-      uploaderField = "author";
-      break;
-    default:
-      return res.status(400).json({ message: "Loại nội dung không hợp lệ" });
-  }
-
-  // Cập nhật trạng thái report
-  report.resolvedResult = result;
-  report.isResolved = true;
-  await report.save();
-
-  // Giảm reportReviewCount và (nếu valid) tăng reportCount
-  const updateFields = { $inc: { reportReviewCount: -1 } };
-  if (result === "valid") {
-    updateFields.$inc.reportCount = 1;
-  }
-
-  await Model.updateOne(
-    { _id: report.contentId },
-    updateFields
-  );
-
-  // Nếu valid, check thêm để xử lý violationStatus & isBanned
-  if (result === "valid") {
-    const content = await Model.findById(report.contentId);
-    if (content) {
-      await checkAndUpdateContentViolationStatus({ content, Model, uploaderField });
+    if (!mongoose.Types.ObjectId.isValid(reportId)) {
+        return res.status(400).json({ message: "Invalid report ID" });
     }
-  }
 
-  res.status(200).json({
-    reportId: report._id,
-    contentId: report.contentId,
-    resolvedResult: report.resolvedResult,
-    message: `Đã cập nhật kết quả xử lý report của ${report.contentType} là "${result}"`,
-  });
+    if (!["valid", "invalid"].includes(result)) {
+        return res.status(400).json({ message: "Kết quả phải là 'valid' hoặc 'invalid'" });
+    }
+
+    const report = await ReportReview.findById(reportId);
+    if (!report) {
+        return res.status(404).json({ message: "Report không tồn tại" });
+    }
+
+    if (report.resolvedResult !== "pending") {
+        return res.status(400).json({ message: "Report đã được xử lý trước đó" });
+    }
+
+    let Model;
+    let uploaderField;
+    switch (report.contentType) {
+        case "Video":
+            Model = Video;
+            uploaderField = "uploader";
+            break;
+        case "ShortVideo":
+            Model = ShortVideo;
+            uploaderField = "uploader";
+            break;
+        case "Blog":
+            Model = Blog;
+            uploaderField = "author";
+            break;
+        default:
+            return res.status(400).json({ message: "Loại nội dung không hợp lệ" });
+    }
+
+    // Cập nhật trạng thái report
+    report.resolvedResult = result;
+    report.isResolved = true;
+    await report.save();
+
+    // Giảm reportReviewCount và (nếu valid) tăng reportCount
+    const updateFields = { $inc: { reportReviewCount: -1 } };
+    if (result === "valid") {
+        updateFields.$inc.reportCount = 1;
+    }
+
+    await Model.updateOne(
+        { _id: report.contentId },
+        updateFields
+    );
+
+    // Nếu valid, check thêm để xử lý violationStatus & isBanned
+    if (result === "valid") {
+        const content = await Model.findById(report.contentId);
+        if (content) {
+            await checkAndUpdateContentViolationStatus({ content, Model, uploaderField });
+        }
+    }
+
+    res.status(200).json({
+        reportId: report._id,
+        contentId: report.contentId,
+        resolvedResult: report.resolvedResult,
+        message: `Đã cập nhật kết quả xử lý report của ${report.contentType} là "${result}"`,
+    });
 });
 
 module.exports = {

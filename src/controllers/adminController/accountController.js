@@ -35,74 +35,110 @@ const getAllAccounts = asyncHandler(async (req, res) => {
   const { page = 1, sort = "createdAtDesc", status, keyword = "" } = req.query;
 
   const pageNum = parseInt(page);
-  const limit = 5;
+  const limit = 2;
   const skip = (pageNum - 1) * limit;
 
-  // Điều kiện sắp xếp
   const sortOptions = {
     createdAtDesc: { createdAt: -1 },
     createdAtAsc: { createdAt: 1 },
-    videoTotalDesc: { videoTotal: -1 },
+    contentTotalDesc: { "contentTotal.total": -1 },
     viewTotalDesc: { viewTotal: -1 },
     reportCountDesc: { reportCount: -1 },
   };
 
   const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
 
-  // Điều kiện lọc
   const query = {};
 
+  let totalAccounts = await Channel.countDocuments(query);
+
   if (keyword) {
-    query.nameChannel = { $regex: keyword, $options: "i" }; // tìm không phân biệt hoa thường
+    query.nameChannel = { $regex: keyword, $options: "i" };  // tìm không phân biệt hoa thường
   }
 
   if (["normal", "warning", "banned"].includes(status)) {
     query.violationStatus = status;
   }
 
-  // Tổng số tài khoản
-  const totalAccounts = await Channel.countDocuments(query);
+  totalAccounts = await Channel.countDocuments(query);
 
-  // Truy vấn dữ liệu
-  const channels = await Channel.find(query)
-    .populate({
-      path: "owner",
-      select: "email typeLogin isBlocked",
-    })
-    .sort(sortCondition)
-    .skip(skip)
-    .limit(limit)
-    .lean();
+  const totalPages = Math.ceil(totalAccounts / limit);
 
-  // Map dữ liệu cho response
-  const accounts = channels.map((channel) => ({
-    id: channel._id,
-    avatarChannel: channel.avatarChannel,
-    nameChannel: channel.nameChannel,
-    ownerId: channel.owner?._id,
-    email: channel.owner?.email || "N/A",
-    typeLogin: channel.owner?.typeLogin || "local",
-    isBlocked: channel.owner?.isBlocked ?? false,
-    violationStatus: channel.violationStatus,
-    createdAt: channel.createdAt,
-    videoTotal: channel.videoTotal,
-    viewTotal: channel.viewTotal,
-    reportCount: channel.reportCount,
-  }));
+  try {
+    const filteredTotal = await Channel.countDocuments(query);
 
-  // Kiểm tra còn trang sau không
-  const hasMore = skip + limit < totalAccounts;
+    const channels = await Channel.find(query)
+      .populate({
+        path: "owner",
+        select: "email typeLogin isBlocked",
+      })
+      .sort(sortCondition)
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-  // Gửi response
-  res.status(200).json({
-    accounts,
-    totalAccounts,
-    hasMore,
-    // page: pageNum,
-    limit,
-    keyword,
-    status: status || "all",
-  });
+    const accounts = channels.map((channel) => ({
+      id: channel._id,
+      avatarChannel: channel.avatarChannel,
+      nameChannel: channel.nameChannel,
+      ownerId: channel.owner?._id,
+      email: channel.owner?.email || "N/A",
+      typeLogin: channel.owner?.typeLogin || "local",
+      isBlocked: channel.owner?.isBlocked ?? false,
+      violationStatus: channel.violationStatus,
+      createdAt: channel.createdAt,
+      contentTotal: channel.contentTotal.total,
+      videoTotal: channel.contentTotal.videos,
+      blogTotal: channel.contentTotal.blogs,
+      shortVideoTotal: channel.contentTotal.shortVideos,
+      viewTotal: channel.viewTotal,
+      reportCount: channel.reportCount,
+    }));
+
+    const hasMore = skip + limit < totalAccounts;
+
+    if (filteredTotal === 0 && keyword) {
+      return res.status(200).json({
+        accounts: [],
+        totalAccounts,
+        totalPages,
+        hasMore: false,
+        page: pageNum,
+        limit,
+        keyword,
+        status: status || "all",
+        message: `No accounts found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalAccounts === 0) {
+      return res.status(200).json({
+        accounts: [],
+        totalAccounts,
+        totalPages,
+        hasMore: false,
+        page: pageNum,
+        limit,
+        keyword,
+        status: status || "all",
+        message: "No accounts found.",
+      });
+    }
+
+    res.status(200).json({
+      accounts,
+      totalAccounts,
+      totalPages,
+      hasMore,
+      page: pageNum,
+      limit,
+      keyword,
+      status: status || "all",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
 });
 
 const getAccountDetailByUserId = asyncHandler(async (req, res) => {
@@ -290,78 +326,78 @@ const getAllBlogsByChannelId = asyncHandler(async (req, res) => {
 });
 
 const getReportReviewsByChannel = asyncHandler(async (req, res) => {
-    const { channelId } = req.params;
-    const { 
-        page = 1, 
-        contentType, 
-        status, 
-        sort = "newest", 
-        resolved 
-    } = req.query;
+  const { channelId } = req.params;
+  const {
+    page = 1,
+    contentType,
+    status,
+    sort = "newest",
+    resolved
+  } = req.query;
 
-    if (!channelId || !mongoose.Types.ObjectId.isValid(channelId)) {
-        return res.status(400).json({ message: "Invalid or missing channel id" });
-    }
+  if (!channelId || !mongoose.Types.ObjectId.isValid(channelId)) {
+    return res.status(400).json({ message: "Invalid or missing channel id" });
+  }
 
-    const pageNum = parseInt(page);
-    const limit = 5;
-    const skip = (pageNum - 1) * limit;
+  const pageNum = parseInt(page);
+  const limit = 5;
+  const skip = (pageNum - 1) * limit;
 
-    // Query điều kiện cơ bản
-    const query = {
-        reportedChannel: channelId,
-    };
+  // Query điều kiện cơ bản
+  const query = {
+    reportedChannel: channelId,
+  };
 
-    // Filter contentType
-    if (contentType && ["Video", "ShortVideo", "Blog"].includes(contentType)) {
-        query.contentType = contentType;
-    }
+  // Filter contentType
+  if (contentType && ["Video", "ShortVideo", "Blog"].includes(contentType)) {
+    query.contentType = contentType;
+  }
 
-    // Filter resolvedResult
-    if (status && ["valid", "invalid", "pending"].includes(status)) {
-        query.resolvedResult = status;
-    }
+  // Filter resolvedResult
+  if (status && ["valid", "invalid", "pending"].includes(status)) {
+    query.resolvedResult = status;
+  }
 
-    // Filter isResolved
-    if (resolved === "resolved") {
-        query.isResolved = true;
-    } else if (resolved === "unresolved") {
-        query.isResolved = false;
-    }
+  // Filter isResolved
+  if (resolved === "resolved") {
+    query.isResolved = true;
+  } else if (resolved === "unresolved") {
+    query.isResolved = false;
+  }
 
-    // Sắp xếp
-    const sortOptions = {
-        newest: { createdAt: -1 },
-        oldest: { createdAt: 1 },
-        // resolved: { isResolved: 1, createdAt: -1 },
-    };
-    const sortCondition = sortOptions[sort] || sortOptions.newest;
+  // Sắp xếp
+  const sortOptions = {
+    newest: { createdAt: -1 },
+    oldest: { createdAt: 1 },
+    // resolved: { isResolved: 1, createdAt: -1 },
+  };
+  const sortCondition = sortOptions[sort] || sortOptions.newest;
 
-    // Đếm tổng số report
-    const totalReports = await ReportReview.countDocuments(query);
+  // Đếm tổng số report
+  const totalReports = await ReportReview.countDocuments(query);
 
-    // Lấy danh sách report
-    const reports = await ReportReview.find(query)
-        .sort(sortCondition)
-        .skip(skip)
-        .limit(limit)
-        .populate("reporters", "nameChannel avatarChannel")
-        .lean();
+  // Lấy danh sách report
+  const reports = await ReportReview.find(query)
+    .sort(sortCondition)
+    .skip(skip)
+    .limit(limit)
+    .populate("reporters", "nameChannel avatarChannel")
+    .lean();
 
-    // Kiểm tra còn trang sau không
-    const hasMore = skip + limit < totalReports;
+  // Kiểm tra còn trang sau không
+  const hasMore = skip + limit < totalReports;
 
-    res.status(200).json({
-        reports,
-        totalReports,
-        hasMore,
-        page: pageNum,
-        limit,
-        contentType: contentType || "all",
-        status: status || "all",
-        sort: sort || "newest",
-        resolved: resolved || "all",
-    });
+  res.status(200).json({
+    reports,
+    totalReports,
+    hasMore,
+    page: pageNum,
+    limit,
+    contentType: contentType || "all",
+    status: status || "all",
+    sort: sort || "newest",
+    resolved: resolved || "all",
+  });
 });
 
 //* POST, PUT
@@ -438,6 +474,71 @@ const blockUserIfChannelBanned = asyncHandler(async (req, res) => {
   return res.status(200).json({ message: `Đã block user ${user.username} và gửi email thông báo.` });
 });
 
+const unblockUserIfChannelUnbanned = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return res.status(400).json({ message: "Invalid user id" });
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({ message: "Không tìm thấy user." });
+  }
+
+  if (!user.isBlocked) {
+    return res.status(400).json({ message: "User này hiện không bị block." });
+  }
+
+  user.isBlocked = false;
+  await user.save();
+
+  const channel = await Channel.findOne({ owner: userId });
+  if (channel) {
+    if (channel.violationStatus === "banned") {
+      channel.violationStatus = "warning";
+      await channel.save();
+    }
+  }
+
+  await sendMail({
+    from: `"Admin Metube" <${process.env.EMAIL_NAME}>`,
+    email: user.email,
+    subject: "Tài khoản của bạn đã được mở khóa",
+    html: `
+      <div style="max-width:600px;margin:auto;font-family:sans-serif;border-radius:8px;overflow:hidden;background:#ecfdf5;">
+        <div style="background:linear-gradient(90deg,#22c55e,#10b981);color:white;padding:24px;text-align:center;">
+          <h2 style="margin:0;font-size:24px;">Metube</h2>
+        </div>
+        <div style="padding:24px;">
+          <h3 style="color:#0f172a;margin-top:0;">Xin chào ${user.username},</h3>
+          <p style="color:#334155;line-height:1.6;">
+            Chúng tôi xin thông báo rằng tài khoản của bạn đã được 
+            <b style="color:#15803d;">mở khóa</b> và bạn có thể tiếp tục sử dụng dịch vụ của chúng tôi.
+          </p>
+          <p style="color:#334155;line-height:1.6;">
+            Cảm ơn bạn đã hợp tác và tuân thủ các chính sách cộng đồng.
+          </p>
+          <div style="text-align:center;margin:30px 0;">
+            <a href="${process.env.CLIENT_URL}" style="background:#22c55e;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;display:inline-block;font-size:16px;">
+              🎉 Đăng nhập ngay
+            </a>
+          </div>
+          <p style="color:#64748b;font-size:14px;">
+            Chúc bạn có trải nghiệm tuyệt vời tại nền tảng của chúng tôi.
+          </p>
+        </div>
+        <div style="background:#d1fae5;color:#065f46;padding:18px;text-align:center;font-size:13px;">
+          &copy; ${new Date().getFullYear()} Your Platform Name. All rights reserved.
+        </div>
+      </div>
+    `,
+  });
+
+  console.log(`Đã gỡ block cho user ${user.username} và gửi email thông báo.`);
+  return res.status(200).json({ message: `Đã gỡ block cho user ${user.username} và gửi email thông báo.` });
+});
+
 module.exports = {
   getAccountSummary,
   getAllAccounts,
@@ -447,4 +548,5 @@ module.exports = {
   getAllBlogsByChannelId,
   getReportReviewsByChannel,
   blockUserIfChannelBanned,
+  unblockUserIfChannelUnbanned,
 };

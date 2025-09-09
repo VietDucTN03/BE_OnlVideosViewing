@@ -2,6 +2,8 @@ const express = require("express");
 
 const adminRouter = express.Router();
 
+const dashboardController = require("../../controllers/adminController/dashboardController");
+
 const accountController = require("../../controllers/adminController/accountController");
 
 const videoController = require("../../controllers/adminController/videoController");
@@ -28,6 +30,20 @@ const { adminLimiter } = require("../../middlewares/rateLimit");
 
 adminRouter.use(adminLimiter);
 
+//* Dashboard
+
+adminRouter.get("/get-system-stats", protect, isAdminOrSuperAdmin, dashboardController.getSystemStats);
+
+adminRouter.get("/get-user-stats-by-filter", protect, isAdminOrSuperAdmin, dashboardController.getUserStatsByFilter);
+
+adminRouter.get("/get-content-stats-by-filter", protect, isAdminOrSuperAdmin, dashboardController.getContentStatsByFilter);
+
+adminRouter.get("/get-view-stats-by-filter", protect, isAdminOrSuperAdmin, dashboardController.getViewStatsByFilter);
+
+adminRouter.get("/get-comment-stats-by-filter", protect, isAdminOrSuperAdmin, dashboardController.getCommentStatsByFilter);
+
+//* Account
+
 adminRouter.get("/get-account-summary", protect, isAdminOrSuperAdmin, accountController.getAccountSummary);
 
 adminRouter.get("/get-all-accounts", protect, isAdminOrSuperAdmin, accountController.getAllAccounts);
@@ -43,6 +59,8 @@ adminRouter.get("/get-all-blogs-of-channel/:channelId", protect, isAdminOrSuperA
 adminRouter.get("/get-report-reviews-by-channel/:channelId", protect, isAdminOrSuperAdmin, accountController.getReportReviewsByChannel);
 
 adminRouter.put("/block-user-if-channel-banned/:userId", protect, isAdminOrSuperAdmin, accountController.blockUserIfChannelBanned);
+
+adminRouter.put("/unblock-user-if-channel-unbanned/:userId", protect, isAdminOrSuperAdmin, accountController.unblockUserIfChannelUnbanned);
 
 //* Video
 
@@ -96,9 +114,15 @@ adminRouter.put("/resolve-report-review/:reportId", protect, isAdminOrSuperAdmin
 
 // ? Subscription
 
+adminRouter.get("/get-subscription-summary", protect, isAdminOrSuperAdmin, subscriptionController.getSubscriptionSummary);
+
+adminRouter.get("/get-top-subscriptions", protect, isAdminOrSuperAdmin, subscriptionController.getTopSubscriptions);
+
 adminRouter.get("/get-all-subscription-plans", protect, isAdminOrSuperAdmin, subscriptionController.getAllSubscriptionPlans);
 
 adminRouter.post("/create-subscription-plan", protect, isAdminOrSuperAdmin, subscriptionController.createSubscriptionPlan);
+
+adminRouter.get("/get-subscription-by-id/:subscriptionId", protect, isAdminOrSuperAdmin, subscriptionController.getSubscriptionById);
 
 adminRouter.put("/update-subscription-plan/:subscriptionId", protect, isAdminOrSuperAdmin, subscriptionController.updateSubscriptionPlan);
 
@@ -108,6 +132,8 @@ adminRouter.delete("/delete-subscription-plan/:subscriptionId", protect, isAdmin
 
 adminRouter.get("/get-user-subscription-history/:userId", protect, isAdminOrSuperAdmin, userSubscriptionController.getUserSubscriptionHistory);
 
-adminRouter.put("/cancel-user-subscription/:userId", protect, isAdminOrSuperAdmin, userSubscriptionController.cancelUserSubscription);
+adminRouter.get("/get-user-subscription/:userId/:userSubscriptionId", protect, isAdminOrSuperAdmin, userSubscriptionController.getUserSubscription);
+
+adminRouter.put("/cancel-user-subscription/:userId/:userSubscriptionId", protect, isAdminOrSuperAdmin, userSubscriptionController.cancelUserSubscription);
 
 module.exports = adminRouter;
