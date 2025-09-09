@@ -16,7 +16,7 @@ const checkAndUpdateChannelViolationStatus = async (channelId) => {
     messageText = `Kênh của bạn đã bị cảnh báo do có 1 lượt báo cáo ⚠️`;
   } else if (channel.reportCount === 2 && channel.violationStatus === "warning") {
     update.violationStatus = "banned";
-    messageType = "ban";
+    messageType = "banned";
     messageText = `Kênh của bạn đã bị khóa do có 2 lượt báo cáo 🚫`;
   }
 

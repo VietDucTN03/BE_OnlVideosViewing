@@ -30,7 +30,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
   } = req.query;
 
   const pageNum = parseInt(page);
-  const limit = 10;
+  const limit = 5;
   const skip = (pageNum - 1) * limit;
 
   const sortOptions = {
@@ -47,7 +47,8 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
   const query = {};
 
-  // Search theo title hoặc nameChannel
+  let totalVideos = await Video.countDocuments(query);
+
   if (keyword) {
     const matchedChannels = await Channel.find({
       nameChannel: { $regex: keyword, $options: "i" },
@@ -59,66 +60,111 @@ const getAllVideos = asyncHandler(async (req, res) => {
     ];
   }
 
-  // Filter theo visibilityStatus (hiển thị)
   if (visibilityStatus === "public") {
     query.isPrivate = false;
   } else if (visibilityStatus === "private") {
     query.isPrivate = true;
   }
 
-  // Filter theo banStatus
   if (banStatus === "banned") {
     query.isBanned = true;
   } else if (banStatus === "notBanned") {
     query.isBanned = false;
   }
 
-  // Filter theo violationStatus
   if (["normal", "warning", "banned"].includes(violationStatus)) {
     query.violationStatus = violationStatus;
   }
 
-  const totalVideos = await Video.countDocuments(query);
+  totalVideos = await Video.countDocuments(query);
 
-  const videos = await Video.find(query)
-    .populate({
-      path: "uploader",
-      select: "nameChannel avatarChannel",
-    })
-    .sort(sortCondition)
-    .skip(skip)
-    .limit(limit)
-    .lean();
+  const totalPages = Math.ceil(totalVideos / limit);
 
-  const result = videos.map((video) => ({
-    id: video._id,
-    title: video.title,
-    thumbnail: video.thumbnail,
-    views: video.views,
-    like: video.statusTotal?.like || 0,
-    // dislike: video.statusTotal?.dislike || 0,
-    commentTotal: video.commentTotal,
-    reportReviewCount: video.reportReviewCount,
-    isPrivate: video.isPrivate,
-    violationStatus: video.violationStatus,
-    isBanned: video.isBanned,
-    createdAt: video.createdAt,
-    channelName: video.uploader?.nameChannel || "Unknown",
-    channelAvatar: video.uploader?.avatarChannel || "",
-  }));
+  try {
+    const filteredTotal = await Video.countDocuments(query);
 
-  res.status(200).json({
-    videos: result,
-    totalVideos,
-    hasMore: skip + limit < totalVideos,
-    page: pageNum,
-    limit,
-    keyword,
-    visibilityStatus,
-    banStatus,
-    violationStatus,
-    sort,
-  });
+    const videos = await Video.find(query)
+      .populate({
+        path: "uploader",
+        select: "nameChannel avatarChannel",
+      })
+      .sort(sortCondition)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const result = videos.map((video) => ({
+      id: video._id,
+      title: video.title,
+      thumbnail: video.thumbnail,
+      views: video.views,
+      like: video.statusTotal?.like || 0,
+      // dislike: video.statusTotal?.dislike || 0,
+      commentTotal: video.commentTotal,
+      reportReviewCount: video.reportReviewCount,
+      isPrivate: video.isPrivate,
+      violationStatus: video.violationStatus,
+      isBanned: video.isBanned,
+      createdAt: video.createdAt,
+      channelName: video.uploader?.nameChannel || "Unknown",
+      channelAvatar: video.uploader?.avatarChannel || "",
+    }));
+
+    const hasMore = skip + limit < filteredTotal;
+
+    if (keyword && filteredTotal === 0) {
+      return res.status(200).json({
+        success: true,
+        videos: result,
+        page: 1,
+        limit,
+        totalVideos: 0,
+        totalPages: 0,
+        hasMore: false,
+        keyword,
+        sort,
+        visibilityStatus,
+        banStatus,
+        violationStatus,
+        message: `No videos found matching the keyword "${keyword}".`,
+      });
+    }
+
+    if (totalVideos === 0) {
+      return res.status(200).json({
+        success: true,
+        videos: result,
+        page: 1,
+        limit,
+        totalVideos: 0,
+        totalPages: 0,
+        hasMore: false,
+        keyword,
+        sort,
+        visibilityStatus,
+        banStatus,
+        violationStatus,
+        message: "No videos found.",
+      });
+    }
+
+    res.status(200).json({
+      videos: result,
+      totalVideos,
+      totalPages,
+      hasMore,
+      page: pageNum,
+      limit,
+      keyword,
+      visibilityStatus,
+      banStatus,
+      violationStatus,
+      sort,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
 });
 
 const getVideoById = asyncHandler(async (req, res) => {

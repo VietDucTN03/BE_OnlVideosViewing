@@ -45,6 +45,8 @@ const getAllBlogs = asyncHandler(async (req, res) => {
 
     const query = {};
 
+    let totalBlogs = await Blog.countDocuments(query);
+
     if (keyword) {
         const matchedChannels = await Channel.find({
             nameChannel: { $regex: keyword, $options: "i" },
@@ -72,52 +74,95 @@ const getAllBlogs = asyncHandler(async (req, res) => {
         }
     }
 
-    // Filter theo violationStatus
     if (["normal", "warning", "banned"].includes(violationStatus)) {
         query.violationStatus = violationStatus;
     }
 
-    const totalBlogs = await Blog.countDocuments(query);
+    totalBlogs = await Blog.countDocuments(query);
 
-    const blogs = await Blog.find(query)
-        .populate({
-            path: "author",
-            select: "nameChannel avatarChannel",
-        })
-        .sort(sortCondition)
-        .skip(skip)
-        .limit(limit)
-        .lean();
+    const totalPages = Math.ceil(totalBlogs / limit);
 
-    const result = blogs.map((blog) => ({
-        id: blog._id,
-        title: blog.title,
-        blogImgs: blog.blogImgs,
-        categories: blog.categories,
-        like: blog.statusTotal?.like || 0,
-        // dislike: blog.statusTotal?.dislike || 0,
-        comments: blog.commentTotal,
-        reportReviews: blog.reportReviewCount,
-        isPrivate: blog.isPrivate,
-        isBanned: blog.isBanned,
-        violationStatus: blog.violationStatus,
-        createdAt: blog.createdAt,
-        channelName: blog.author?.nameChannel || "",
-        channelAvatar: blog.author?.avatarChannel || "",
-    }));
+    try {
+        const filteredTotal = await Blog.countDocuments(query);
 
-    res.status(200).json({
-        totalBlogs,
-        blogs: result,
-        hasMore: skip + limit < totalBlogs,
-        // page: pageNum,
-        limit,
-        sort,
-        keyword,
-        visibilityStatus,
-        banStatus,
-        violationStatus,
-    });
+        const blogs = await Blog.find(query)
+            .populate({
+                path: "author",
+                select: "nameChannel avatarChannel",
+            })
+            .sort(sortCondition)
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        const result = blogs.map((blog) => ({
+            id: blog._id,
+            title: blog.title,
+            blogImgs: blog.blogImgs,
+            categories: blog.categories,
+            like: blog.statusTotal?.like || 0,
+            // dislike: blog.statusTotal?.dislike || 0,
+            comments: blog.commentTotal,
+            reportReviews: blog.reportReviewCount,
+            isPrivate: blog.isPrivate,
+            isBanned: blog.isBanned,
+            violationStatus: blog.violationStatus,
+            createdAt: blog.createdAt,
+            channelName: blog.author?.nameChannel || "",
+            channelAvatar: blog.author?.avatarChannel || "",
+        }));
+
+        if (keyword && filteredTotal === 0) {
+            return res.status(200).json({
+                blogs: result,
+                totalBlogs: 0,
+                totalPages: 0,
+                hasMore: false,
+                page: 1,
+                limit,
+                sort,
+                keyword,
+                visibilityStatus,
+                banStatus,
+                violationStatus,
+                message: `No blogs found matching the keyword "${keyword}".`,
+            });
+        }
+
+        if (totalBlogs === 0) {
+            return res.status(200).json({
+                blogs: result,
+                totalBlogs: 0,
+                totalPages: 0,
+                hasMore: false,
+                page: 1,
+                limit,
+                sort,
+                keyword,
+                visibilityStatus,
+                banStatus,
+                violationStatus,
+                message: "No blogs found.",
+            });
+        }
+
+        res.status(200).json({
+            blogs: result,
+            totalBlogs,
+            totalPages,
+            hasMore: skip + limit < totalBlogs,
+            page: pageNum,
+            limit,
+            sort,
+            keyword,
+            visibilityStatus,
+            banStatus,
+            violationStatus,
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
 });
 
 const getBlogById = asyncHandler(async (req, res) => {
@@ -250,7 +295,7 @@ const deleteBlogById = asyncHandler(async (req, res) => {
     }
 
     await deleteFromCloudinary(blog.blogImgs, "image");
-    
+
     await Blog.findByIdAndDelete(blogId);
 
     res.status(200).json({ message: `Blog "${blog.title}" deleted successfully` });

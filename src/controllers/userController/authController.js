@@ -79,6 +79,7 @@ const loginSuccess = async (req, res) => {
         avatar: user.avatar,
         role: user.role,
         typeLogin: user.typeLogin,
+        isBlocked: user.isBlocked,
         channel: {
           _id: user.channel?._id,
           nameChannel: user.channel?.nameChannel,
@@ -89,6 +90,7 @@ const loginSuccess = async (req, res) => {
           subscribersCount: user.channel?.subscribersCount,
           contentTotal: user.channel?.contentTotal?.total,
           viewTotal: user.channel?.viewTotal,
+          violationStatus: user.channel?.violationStatus,
         },
       },
     });

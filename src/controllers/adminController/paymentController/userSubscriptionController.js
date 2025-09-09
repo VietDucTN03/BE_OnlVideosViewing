@@ -17,7 +17,7 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
     const { userId } = req.params;
 
     const pageNum = parseInt(page, 10);
-    const limit = 5;
+    const limit = 9;
     const skip = (pageNum - 1) * limit;
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -30,30 +30,27 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
     const sortOptions = {
         createdAtDesc: { createdAt: -1 },
         createdAtAsc: { createdAt: 1 },
-        startDateAsc: { startDate: 1 },
-        startDateDesc: { startDate: -1 },
         endDateAsc: { endDate: 1 },
         endDateDesc: { endDate: -1 },
     };
 
     const sortCondition = sortOptions[sort] || sortOptions.createdAtDesc;
 
-    // Base query
     const baseQuery = { userId: new mongoose.Types.ObjectId(userId) };
 
-    // Lấy tổng số lịch sử ban đầu (chưa filter status)
-    const totalHistory = await UserSubscription.countDocuments(baseQuery);
+    let totalHistory = await UserSubscription.countDocuments(baseQuery);
 
-    // Thêm điều kiện lọc
     const query = { ...baseQuery };
     if (["active", "expired", "cancelled"].includes(status)) {
         query.status = status;
     }
 
-    const filteredTotal = await UserSubscription.countDocuments(query);
-    const totalPages = Math.ceil(filteredTotal / limit);
+    totalHistory = await UserSubscription.countDocuments(query);
+
+    const totalPages = Math.ceil(totalHistory / limit);
 
     try {
+        const filteredTotal = await UserSubscription.countDocuments(query);
         const history = await UserSubscription.find(query)
             .populate({
                 path: "subscriptionId",
@@ -70,10 +67,11 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
 
         const hasMore = skip + history.length < filteredTotal;
 
-        // Nếu tất cả subscriptionId null hoặc gói không active
+        // * Nếu tất cả subscriptionId null hoặc gói không active
         const allInvalid = history.every(
             (sub) => !sub.subscriptionId || sub.subscriptionId.isActive === false
         );
+
         if (allInvalid && history.length > 0) {
             return res.status(200).json({
                 success: true,
@@ -89,7 +87,6 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
             });
         }
 
-        // Không có bản ghi
         if (totalHistory === 0) {
             return res.status(200).json({
                 success: true,
@@ -127,56 +124,125 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
     }
 });
 
+const getUserSubscription = asyncHandler(async (req, res) => {
+    const { userId, userSubscriptionId } = req.params;
+
+    if (!userId || !userSubscriptionId) {
+        return res.status(400).json({
+            success: false,
+            message: "Thiếu userId hoặc userSubscriptionId."
+        });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(userSubscriptionId)) {
+        return res.status(400).json({
+            success: false,
+            message: "Định dạng userId hoặc userSubscriptionId không hợp lệ."
+        });
+    }
+
+    try {
+        // Lấy dữ liệu song song: UserSubscription + Channel
+        const [userSub, channel] = await Promise.all([
+            UserSubscription.findOne({
+                _id: new mongoose.Types.ObjectId(userSubscriptionId),
+                userId: new mongoose.Types.ObjectId(userId),
+            })
+                .populate("userId", "username email")
+                .populate("subscriptionId", "name description price duration periodType features isActive")
+                .populate("paymentId", "paymentMethod amount status transactionId paymentDate paymentMeta")
+                .lean(),
+            Channel.findOne({ owner: userId })
+                .select("nameChannel avatarChannel isPremium violationStatus")
+                .lean()
+        ]);
+
+        if (!userSub) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy subscription hoặc không có quyền truy cập."
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Lấy chi tiết subscription thành công.",
+            subscription: userSub,
+            channel: channel || null
+        });
+    } catch (error) {
+        console.error("❌ Lỗi khi lấy chi tiết userSubscription:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Lỗi server khi lấy chi tiết userSubscription.",
+            error: error.message
+        });
+    }
+});
+
 const cancelUserSubscription = asyncHandler(async (req, res) => {
-    const { userId } = req.params;
+    const { userId, userSubscriptionId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(userSubscriptionId)) {
         return res.status(400).json({
             success: false,
-            message: "Invalid user ID format.",
+            message: "Invalid userId hoặc userSubscriptionId format.",
         });
     }
 
-    // Tìm gói đang active
-    const activeSub = await UserSubscription.findOne({
-        userId: new mongoose.Types.ObjectId(userId),
-        status: "active",
-    }).populate("subscriptionId");
+    try {
+        const userSub = await UserSubscription.findOne({
+            _id: new mongoose.Types.ObjectId(userSubscriptionId),
+            userId: new mongoose.Types.ObjectId(userId),
+        }).populate("subscriptionId", "name");
 
-    if (!activeSub) {
-        return res.status(400).json({
+        if (!userSub) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy gói đăng ký.",
+            });
+        }
+
+        if (userSub.status !== "active") {
+            return res.status(400).json({
+                success: false,
+                message: "Gói đăng ký này không còn hoạt động để hủy.",
+            });
+        }
+
+        userSub.status = "cancelled";
+        userSub.cancelledAt = new Date();
+        await userSub.save();
+
+        await Channel.findOneAndUpdate(
+            { owner: userId },
+            { $set: { isPremium: false } }
+        );
+
+        await updateUserSubscription({
+            userId,
+            subscriptionName: userSub.subscriptionId?.name || "Premium",
+            endDate: userSub.endDate,
+            type: "cancelled",
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Hủy gói đăng ký thành công.",
+            subscription: userSub,
+        });
+    } catch (error) {
+        console.error("❌ Lỗi khi hủy gói đăng ký:", error);
+        return res.status(500).json({
             success: false,
-            message: "Không có gói đăng ký đang hoạt động để hủy.",
+            message: "Đã xảy ra lỗi trong quá trình hủy gói đăng ký.",
+            error: error.message,
         });
     }
-
-    // Cập nhật trạng thái gói thành cancelled
-    activeSub.status = "cancelled";
-    activeSub.cancelledAt = new Date();
-    await activeSub.save();
-
-    // Cập nhật kênh thành không premium
-    await Channel.findOneAndUpdate(
-        { owner: userId },
-        { $set: { isPremium: false } }
-    );
-
-    // Gọi hàm updateUserSubscription
-    await updateUserSubscription({
-        userId,
-        subscriptionName: activeSub.subscriptionId?.name || "Premium",
-        endDate: activeSub.endDate,
-        type: "cancelled",
-    });
-
-    return res.status(200).json({
-        success: true,
-        message: "Hủy gói đăng ký thành công.",
-        subscription: activeSub,
-    });
 });
 
 module.exports = {
     getUserSubscriptionHistory,
+    getUserSubscription,
     cancelUserSubscription,
 };
