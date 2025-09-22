@@ -144,6 +144,40 @@ const getDetailsOfUserSubscription = asyncHandler(async (req, res) => {
   }
 });
 
+const checkExpiredSubscriptions = async () => {
+  try {
+    const now = new Date();
+
+    const expiredSubs = await UserSubscription.find({
+      status: "active",
+      endDate: { $lte: now }  // * less than or equal (endDate <= now)
+    });
+
+    if (expiredSubs.length === 0) return;
+
+    for (const sub of expiredSubs) {
+      sub.status = "expired";
+      await sub.save();
+
+      await Channel.findOneAndUpdate(
+        { owner: sub.userId },
+        { isPremium: false },
+        { new: true }
+      );
+    }
+
+    res.cookie("showExpiredModal", "true", {
+      httpOnly: false,
+      maxAge: 1000 * 60,
+      sameSite: "strict",
+    });
+
+    console.log(`✅ Đã cập nhật ${expiredSubs.length} subscription hết hạn.`);
+  } catch (error) {
+    console.error("❌ Lỗi khi check expired subscriptions:", error);
+  }
+};
+
 const cancelUserSubscription = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const { userSubscriptionId } = req.params;
@@ -208,5 +242,6 @@ module.exports = {
   getSubscriptionPlans,
   getUserSubscriptionOfUser,
   getDetailsOfUserSubscription,
+  checkExpiredSubscriptions,
   cancelUserSubscription,
 };

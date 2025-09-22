@@ -10,4 +10,6 @@ searchRouter.get("/get-list-of-search-suggestions", searchController.getListOfSe
 
 searchRouter.get("/get-search-results", verifyLoggedIn, searchController.getSearchResults);
 
+searchRouter.get("/get-recent-search-history", verifyLoggedIn, searchController.getRecentSearchHistory);
+
 module.exports = searchRouter;

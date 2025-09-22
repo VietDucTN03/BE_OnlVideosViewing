@@ -15,7 +15,7 @@ const createReportReview = asyncHandler(async (req, res) => {
 
     let reportedChannelId;
 
-    // Tìm channelId của người bị report dựa trên contentType
+    // * Tìm channelId của người bị report dựa trên contentType
     if (contentType === "Video") {
         const video = await Video.findById(contentId);
         if (!video) return res.status(404).json({ message: "Video not found." });
@@ -60,7 +60,7 @@ const createReportReview = asyncHandler(async (req, res) => {
 
     await newReport.save();
 
-    // Tăng reportReviewCount tương ứng
+    // * Tăng reportReviewCount tương ứng
     if (contentType === "Video") {
         await Video.findByIdAndUpdate(contentId, { $inc: { reportReviewCount: 1 } });
     } else if (contentType === "ShortVideo") {

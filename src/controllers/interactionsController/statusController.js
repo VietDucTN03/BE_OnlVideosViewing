@@ -10,21 +10,6 @@ const { createNotification } = require("../interactionsController/notificationCo
 const { io } = require("../../utils/socket.io/socket");
 const mongoose = require("mongoose");
 
-// const getAllStatusByVideoId = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
-
-//   if (!mongoose.Types.ObjectId.isValid(videoId)) {
-//     return res.status(400).json({ message: "Invalid videoId" });
-//   }
-
-//   const statuses = await Status.find({ refId: videoId, refType: "Video" });
-
-//   const like = statuses.filter((s) => s.statusLike === true).length;
-//   const dislike = statuses.filter((s) => s.statusLike === false).length;
-
-//   res.status(200).json({ videoId, like, dislike });
-// });
-
 const getAllStatusByVideoId = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
@@ -65,7 +50,7 @@ const getAllStatusByShortVideoId = asyncHandler(async (req, res) => {
     .select("_id postedBy statusLike")
     .populate({
       path: "postedBy",
-      select: "nameChannel avatarChannel", // Chỉ lấy thông tin cơ bản của người đăng
+      select: "nameChannel avatarChannel",
     })
     .lean();
 
@@ -91,7 +76,7 @@ const getAllStatusByBlogId = asyncHandler(async (req, res) => {
     .select("_id postedBy statusLike")
     .populate({
       path: "postedBy",
-      select: "nameChannel avatarChannel", // Chỉ lấy thông tin cơ bản của người đăng
+      select: "nameChannel avatarChannel",
     })
     .lean();
 
@@ -100,23 +85,6 @@ const getAllStatusByBlogId = asyncHandler(async (req, res) => {
 
   res.status(200).json({ blogId, like, dislike, statusList });
 });
-
-// const getAllStatusByCommentId = asyncHandler(async (req, res) => {
-//   const { commentId } = req.params;
-
-//   if (!mongoose.Types.ObjectId.isValid(commentId)) {
-//     return res.status(400).json({ message: "Invalid commentId" });
-//   }
-
-//   const statusList = await Status.find({ refId: commentId, refType: "Comment" })
-//     .select("_id postedBy statusLike")
-//     .populate({
-//       path: "postedBy",
-//       select: "nameChannel avatarChannel",
-//     });
-
-//   res.status(200).json({ commentId, statusList });
-// });
 
 // const getAllStatusByCommentId = asyncHandler(async (req, res) => {
 //   const { commentId } = req.params;
@@ -190,6 +158,27 @@ const handleLikeNotification = async ({
   const senderChannel = await Channel.findById(userId);
   const message = `${senderChannel.nameChannel} just release 👍 for your ${refType}! 👏`;
 
+  let refDoc;
+  let detailContent = "";
+
+  if (refType === "Video") {
+    refDoc = await Video.findById(refId).select("title");
+    detailContent = `🎬 ${refDoc?.title || "Unknown video"}`;
+  } else if (refType === "ShortVideo") {
+    refDoc = await ShortVideo.findById(refId).select("title");
+    detailContent = `📱 ${refDoc?.title || "Unknown short video"}`;
+  } else if (refType === "Blog") {
+    refDoc = await Blog.findById(refId).select("title");
+    detailContent = `📝 ${refDoc?.title || "Unknown blog"}`;
+  } else if (refType === "Comment") {
+    refDoc = await Comment.findById(refId).select("content");
+    detailContent = `💬 ${refDoc?.content || "No content"}`;
+  } else {
+    detailContent = `📌 Nội dung không xác định.`;
+  }
+
+  // const detailContent = refType === "Comment" ? refDoc?.content : refDoc?.title || "";
+
   if (statusTotal.like > MAX_INDIVIDUAL_NOTIFICATIONS) {
     await sendLikeSummary({
       receiverId: targetUser._id,
@@ -210,7 +199,7 @@ const handleLikeNotification = async ({
       senderAvatar: senderChannel.avatarChannel,
       type: "like",
       message,
-      detailContent: refId,
+      detailContent,
     });
 
     io.to(targetUser._id.toString()).emit(`status-${refType.toLowerCase()}`, {
@@ -267,18 +256,18 @@ const interactionsStatus = asyncHandler(async (req, res) => {
     refType === "Video"
       ? Video
       : refType === "ShortVideo"
-      ? ShortVideo
-      : refType === "Blog"
-      ? Blog
-      : Comment;
+        ? ShortVideo
+        : refType === "Blog"
+          ? Blog
+          : Comment;
   const field =
     refType === "Video"
       ? "uploader"
       : refType === "ShortVideo"
-      ? "uploader"
-      : refType === "Blog"
-      ? "author"
-      : "postedBy";
+        ? "uploader"
+        : refType === "Blog"
+          ? "author"
+          : "postedBy";
 
   const refDoc = await Model.findById(refId).populate(
     field,

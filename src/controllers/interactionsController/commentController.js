@@ -9,29 +9,6 @@ const { createNotification } = require("../interactionsController/notificationCo
 const { io } = require("../../utils/socket.io/socket");
 const mongoose = require("mongoose");
 
-// const getAllCommentByVideoId = asyncHandler(async (req, res) => {
-//   const { videoId } = req.params;
-
-//   if (!videoId) {
-//     return res.status(400).json({ message: "Missing videoId" });
-//   }
-
-//   if (!mongoose.Types.ObjectId.isValid(videoId)) {
-//     return res.status(400).json({ message: "Invalid videoId format" });
-//   }
-
-//   const comments = await Comment.find({
-//     refId: videoId,
-//     refType: "Video",
-//     parentComment: null, // Chỉ lấy comment gốc
-//   })
-//     .sort({ createdAt: -1 }) // Mới nhất lên trước
-//     .populate("postedBy", "nameChannel avatarChannel") // Chỉ populate thông tin cần thiết
-//     .lean();
-
-//   res.status(200).json({ comments });
-// });
-
 const getAllCommentByVideoId = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   const { page = 1, sortBy = "date" } = req.query;
@@ -95,7 +72,7 @@ const getAllCommentByBlogId = asyncHandler(async (req, res) => {
   }
 
   const pageNum = parseInt(page);
-  const limit = 10;
+  const limit = 5;
   const skip = (pageNum - 1) * limit;
 
   let sortCondition = { createdAt: -1 };
@@ -324,7 +301,7 @@ const postComment = asyncHandler(async (req, res) => {
     "nameChannel avatarChannel"
   );
 
-  // Tăng comment count
+  // * Tăng comment count
   await refDoc.constructor.findByIdAndUpdate(refId, {
     $inc: { commentTotal: 1 },
   });
@@ -421,20 +398,20 @@ const replyComment = asyncHandler(async (req, res) => {
       },
     });
 
-  // Tăng tổng comment trong nội dung
+  // * Tăng tổng comment trong nội dung
   await refDoc.constructor.findByIdAndUpdate(refId, { $inc: { commentTotal: 1 } });
 
-  // Tăng tổng reply trong comment cha
+  // * Tăng tổng reply trong comment cha
   await Comment.findByIdAndUpdate(parentCommentId, { $inc: { replyCount: 1 } });
 
   const updatedComment = await refDoc.constructor.findById(refId);
   const totalComments = updatedComment.commentTotal;
 
   const parentOwnerId = String(parentComment.postedBy._id);
-  const infoOwnerId = String(refDoc.uploader || refDoc.author); // xử lý cho cả Video, ShortVideo, Blog
+  const infoOwnerId = String(refDoc.uploader || refDoc.author);  // xử lý cho cả Video, ShortVideo, Blog
   const senderIdStr = userId.toString();
 
-  // Gửi thông báo cho người viết comment gốc
+  // * Gửi thông báo cho người viết comment gốc
   if (parentOwnerId !== senderIdStr) {
     const replyCount = await Comment.countDocuments({
       parentComment: parentCommentId,
@@ -479,7 +456,7 @@ const replyComment = asyncHandler(async (req, res) => {
     }
   }
 
-  // Gửi thông báo cho chủ sở hữu nội dung (video, short video, blog)
+  // * Gửi thông báo cho chủ sở hữu nội dung (video, short video, blog)
   if (infoOwnerId !== senderIdStr) {
     const existingCommentSummary = await Notification.findOne({
       receiverId: infoOwnerId,

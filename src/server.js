@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
+
 const connectDB = require("./config/connectDB");
 const rootRouter = require("./routes/rootRouter");
 require("./passport");
@@ -13,6 +14,8 @@ const fileUpload = require("express-fileupload");
 // const { generalLimiter } = require("./middlewares/rateLimit");
 
 const errorHandler = require("./middlewares/errorHandler");
+
+const initCronJobs = require("./utils/cronJobs/initCronJobs");
 
 app.use(cookieParser());
 app.use(
@@ -39,6 +42,8 @@ app.use(
 app.use(rootRouter);
 
 app.use(errorHandler);
+
+initCronJobs();
 
 const port = process.env.PORT || 5000;
 
