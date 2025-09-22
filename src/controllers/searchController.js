@@ -1,4 +1,4 @@
-const Search = require("../models/search");
+const SearchHistory = require("../models/search");
 const Channel = require("../models/user/channel");
 const Video = require("../models/content/video");
 const Blog = require("../models/content/blog");
@@ -49,7 +49,7 @@ const getListOfSearchSuggestions = asyncHandler(async (req, res) => {
         .select("title commentTotal statusTotal"),
     ]);
 
-  // Gán nhãn type cho từng loại kết quả
+  // * Gán Type cho từng loại kết quả
   const formattedResults = [
     ...videoResults.map((item) => ({
       type: "Video",
@@ -69,7 +69,7 @@ const getListOfSearchSuggestions = asyncHandler(async (req, res) => {
     })),
   ];
 
-  // Loại bỏ trùng lặp theo `keyword`
+  // * Loại bỏ trùng lặp theo `keyword`
   const uniqueResults = [];
   const seen = new Set();
 
@@ -82,7 +82,7 @@ const getListOfSearchSuggestions = asyncHandler(async (req, res) => {
     if (uniqueResults.length >= 10) break;
   }
 
-  res.json({ suggestions: uniqueResults });
+  res.status(200).json({ suggestions: uniqueResults });
 });
 
 const buildLooseRegex = (keyword) => {
@@ -99,26 +99,27 @@ const buildLooseRegex = (keyword) => {
 const getSearchResults = asyncHandler(async (req, res) => {
   const { keyword, page = 1 } = req.query;
 
+  // console.log(req.user?.channel);
+
   if (!keyword) {
     return res.status(400).json({ message: "Keyword is required." });
   }
 
-  // === Ghi lịch sử tìm kiếm ===
   try {
-    await Search.create({
+    await SearchHistory.create({
       keyword: keyword.trim(),
-      userId: req.user?._id || null,
+      userId: req.user?.channel || null,
     });
   } catch (err) {
     console.error("Failed to save search history:", err.message);
   }
 
-  // === Chuẩn hóa keyword ===
+  // * Chuẩn hóa keyword 
   const looseRegex = buildLooseRegex(keyword);
+
   const perPage = 5;
   const skip = (parseInt(page) - 1) * perPage;
 
-  // === Truy vấn dữ liệu ===
   const [videos, shorts, channels, blogs] = await Promise.all([
     Video.find({ title: { $regex: looseRegex }, isPrivate: false })
       .sort({ views: -1, commentTotal: -1, "statusTotal.like": -1 })
@@ -144,7 +145,6 @@ const getSearchResults = asyncHandler(async (req, res) => {
       .lean(),
   ]);
 
-  // === Lấy 2 video top mỗi channel ===
   const channelsWithVideos = await Promise.all(
     channels.map(async (channel) => {
       const topVideos = await Video.find({
@@ -164,7 +164,7 @@ const getSearchResults = asyncHandler(async (req, res) => {
     })
   );
 
-  // === Trộn + tính độ phù hợp ===
+  // * Trộn + tính độ phù hợp
   const sanitizeString = (str) => str.toLowerCase().replace(/[^a-z0-9]/gi, "");
   const normalizedKeyword = sanitizeString(keyword);
 
@@ -187,27 +187,49 @@ const getSearchResults = asyncHandler(async (req, res) => {
 
   const hasMore = skip + paginated.length < scoredResults.length;
 
-  // === Lấy channelId nếu user đăng nhập ===
-  let currentUserChannelId = null;
-  if (req.user?._id) {
-    const myChannel = await Channel.findOne({ owner: req.user._id }).select("_id");
-    if (myChannel) {
-      currentUserChannelId = myChannel._id;
-    }
-  }
-
-  // === Trả về kết quả ===
-  res.json({
+  res.status(200).json({
     results: paginated,
     total: scoredResults.length,
     currentPage: parseInt(page),
     totalPages: Math.ceil(scoredResults.length / perPage),
     hasMore,
-    channelId: currentUserChannelId, // ✅ Thêm channelId tại đây
+    channelId: req.user?.channel,
   });
+});
+
+const getRecentSearchHistory = asyncHandler(async (req, res) => {
+  const userId = req.user?.channel;
+
+  if (!userId) {
+    return res.status(401).json({ message: "User not authenticated." });
+  }
+
+  const valueHistories = await SearchHistory.find({ userId })
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .lean();
+
+  const histories = valueHistories.map((item) => ({
+    type: "History",
+    keyword: item.keyword,
+  }));
+
+  const uniqueResults = [];
+  const seen = new Set();
+
+  for (const item of histories) {
+    const key = item.keyword.toLowerCase();
+    if (!seen.has(key)) {
+      uniqueResults.push(item);
+      seen.add(key);
+    }
+  }
+
+  res.status(200).json({ histories: uniqueResults });
 });
 
 module.exports = {
   getListOfSearchSuggestions,
   getSearchResults,
+  getRecentSearchHistory,
 };

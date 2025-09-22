@@ -2,6 +2,7 @@ const Blog = require("../../models/content/blog");
 const Channel = require("../../models/user/channel");
 const asyncHandler = require("express-async-handler");
 const deleteFromCloudinary = require("../../utils/cloudinary/deleteFromCloudinary");
+const mongoose = require("mongoose");
 
 const getAllBlogsByUserId = asyncHandler(async (req, res) => {
   const { userId } = req.params;
@@ -214,6 +215,10 @@ const getBlogInfo = asyncHandler(async (req, res) => {
 
   if (!blogId) {
     return res.status(400).json({ message: "Thiếu blogId." });
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(blogId)) {
+    return res.status(400).json({ message: "blogId không hợp lệ." });
   }
 
   const blog = await Blog.findById(blogId)

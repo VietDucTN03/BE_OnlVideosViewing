@@ -3,6 +3,7 @@ const Channel = require("../../../models/user/channel");
 const Playlist = require("../../../models/content/playlist");
 const asyncHandler = require("express-async-handler");
 const seedrandom = require("seedrandom");
+const mongoose = require("mongoose");
 
 const deleteFromCloudinary = require("../../../utils/cloudinary/deleteFromCloudinary");
 
@@ -19,7 +20,7 @@ const getRecommendedVideos = asyncHandler(async (req, res) => {
     // console.log("seed: ", seed);
 
     const pageNum = parseInt(page);
-    const limit = 9;
+    const limit = 8;
     const skip = (pageNum - 1) * limit;
 
     const baseQuery = {
@@ -103,14 +104,6 @@ const getRecommendedVideos = asyncHandler(async (req, res) => {
         ...highViews.slice(0, 10),
         ...highComments.slice(0, 10),
       ].map((video) => video._id.toString())
-    );
-
-    const selectedVideos = videos.filter((video) =>
-      topVideosSet.has(video._id.toString())
-    );
-
-    const remainingVideos = videos.filter(
-      (v) => !topVideosSet.has(v._id.toString())
     );
 
     // Shuffle phần còn lại theo seed
@@ -364,7 +357,7 @@ const getAllUserVideos = asyncHandler(async (req, res) => {
   }
 });
 
-// Get Video Relate
+// * Get Video Relate
 const getRelatedVideos = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   const { page = 1, limit = 10, userId, isLoggedIn } = req.query;
@@ -476,8 +469,14 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
 });
 
 const getVideoInfo = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(videoId)) {
+    return res.status(400).json({ message: "Video not found. (Invalid ID)" });
+  }
+
   try {
-    const video = await Video.findById(req.params.videoId)
+    const video = await Video.findById(videoId)
       .select("-reportReviewCount -reportCount -violationStatus")
       .populate(
         "uploader",
@@ -485,9 +484,13 @@ const getVideoInfo = asyncHandler(async (req, res) => {
       )
       .populate("playList", "titlePlaylist");
 
-    if (!video) return res.status(404).json({ message: "Video not found." });
-    res.json(video);
+    if (!video) {
+      return res.status(404).json({ message: "Video not found." });
+    }
+
+    res.status(200).json(video);
   } catch (error) {
+    console.error("Error fetching video:", error);
     res.status(500).json({ message: "Lỗi server" });
   }
 });

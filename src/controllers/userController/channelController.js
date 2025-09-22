@@ -7,15 +7,13 @@ const editChannel = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
   const { nameChannel, description, avatarUrl, bannerUrl } = req.body;
 
-  console.log("👉 Body received from client:", req.body);
-
   const channel = await Channel.findById(channelId);
 
   if (!channel) {
     return res.status(404).json({ message: "Channel not found, please try again." });
   }
 
-  // Kiểm tra nameChannel đã tồn tại chưa (ngoại trừ chính channel hiện tại)
+  // * Kiểm tra nameChannel đã tồn tại chưa (ngoại trừ chính channel hiện tại)
   if (nameChannel && nameChannel !== channel.nameChannel) {
     const existingChannel = await Channel.findOne({
       nameChannel: nameChannel,
@@ -56,14 +54,14 @@ const subscribeToChannel = async (req, res) => {
       return res.status(404).json({ message: "Channel not found." });
     }
 
-    // Initialize subscribers array if it's not defined
+    // * Khởi tạo mảng của người đăng ký nếu nó không được xác định
     if (!channel.subscribers) {
       channel.subscribers = [];
     }
 
     if (channel.subscribers.includes(userId)) {
       return res
-        .status(400)
+        .status(201)
         .json({ message: "User already subscribed to this channel." });
     }
 
@@ -163,14 +161,14 @@ const getListOfChannelSubscribers = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
 
   try {
-    // Lấy channel hiện tại để truy xuất mảng subscribers
     const channel = await Channel.findById(channelId).select("subscribers");
+
+    console.log("channel", channel);
 
     if (!channel) {
       return res.status(404).json({ message: "Channel not found, please try again." });
     }
 
-    // Lấy thông tin của các channel nằm trong danh sách subscribers
     const subscriberChannels = await Channel.find(
       { _id: { $in: channel.subscribers } },
       "_id nameChannel avatarChannel"

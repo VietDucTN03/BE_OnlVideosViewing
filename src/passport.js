@@ -21,28 +21,42 @@ passport.use(
 
         const email = profile.emails[0].value;
 
-        // Tìm hoặc tạo người dùng
-        const user = await User.findOneAndUpdate(
-          { email },
-          {
+        // * Tìm hoặc tạo người dùng
+        // const user = await User.findOneAndUpdate(
+        //   { email },
+        //   {
+        //     username: profile.displayName,
+        //     email,
+        //     avatar: { url: profile.photos?.[0]?.value || null },
+        //     typeLogin: "google",
+        //   },
+        //   { new: true, upsert: true, setDefaultsOnInsert: true }
+        // );
+
+        let user = await User.findOne({ email });
+
+        if (user) {
+          user.username = profile.displayName || user.username;
+          user.avatar = { url: profile.photos?.[0]?.value || user.avatar?.url };
+          await user.save();
+        } else {
+          user = await User.create({
             username: profile.displayName,
             email,
             avatar: { url: profile.photos?.[0]?.value || null },
             typeLogin: "google",
-          },
-          { new: true, upsert: true, setDefaultsOnInsert: true }
-        );
+          });
+        }
 
-        // Kiểm tra xem người dùng có channel chưa
         if (!user.channel) {
           const channel = await Channel.create({ owner: user._id });
 
-          // Cập nhật user với channel vừa tạo
+          // * Cập nhật user với channel vừa tạo
           user.channel = channel._id;
           await user.save();
         }
 
-        console.log("User after Google login:", user);
+        // console.log("User after Google login:", user);
         return done(null, user);
       } catch (error) {
         console.error("Google Auth Error:", error);

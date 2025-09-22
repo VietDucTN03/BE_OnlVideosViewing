@@ -21,7 +21,6 @@ const getViewHistoryByUserId = asyncHandler(async (req, res) => {
     })
     .lean();
 
-  // Kiểm tra nếu không có lịch sử xem thì trả về status 200 và danh sách rỗng
   if (!viewHistory || !viewHistory.listVideoId || viewHistory.listVideoId.length === 0) {
     return res.status(200).json({
       message: "There is no history.",
@@ -32,12 +31,11 @@ const getViewHistoryByUserId = asyncHandler(async (req, res) => {
     });
   }
 
-  // Sắp xếp theo lastViewedAt giảm dần
+  // * Sắp xếp theo lastViewedAt giảm dần
   const sortedHistory = viewHistory.listVideoId.sort(
     (a, b) => new Date(b.lastViewedAt) - new Date(a.lastViewedAt)
   );
 
-  // Phân trang
   const startIndex = (page - 1) * limit;
   const paginatedHistory = sortedHistory.slice(startIndex, startIndex + limit);
 

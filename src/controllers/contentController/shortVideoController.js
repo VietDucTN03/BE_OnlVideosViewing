@@ -6,7 +6,6 @@ const mongoose = require("mongoose");
 const crypto = require("crypto");
 const deleteFromCloudinary = require("../../utils/cloudinary/deleteFromCloudinary");
 
-// Lấy 5 short video cho viewer (trừ Private) dành cho chưa Login.
 const getShortVideoForViewing = asyncHandler(async (req, res) => {
   try {
     const { page = 1, limit = 5 } = req.query;
@@ -14,15 +13,12 @@ const getShortVideoForViewing = asyncHandler(async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // 1. Lấy danh sách video công khai
     const publicShortVideos = await ShortVideo.find({ isPrivate: false })
       .populate("uploader", "nameChannel")
       .select("-reportReviewCount -reportCount -violationStatus -isBanned")
       .lean();
 
-    // console.log("publicShortVideos: ", publicShortVideos);
-
-    // 2. Lọc các video theo 4 tiêu chí
+    // * Lọc các video theo 4 tiêu chí
     const highSub = [...publicShortVideos].sort(
       (a, b) =>
         (b.uploader?.subscribersCount || 0) -
@@ -42,7 +38,7 @@ const getShortVideoForViewing = asyncHandler(async (req, res) => {
       (a, b) => (b.commentTotal || 0) - (a.commentTotal || 0)
     );
 
-    // 3. Chọn một số video hàng đầu từ từng tiêu chí (mỗi tiêu chí lấy 10 video hàng đầu)
+    // * Chọn một số video hàng đầu từ từng tiêu chí
     const topVideos = new Set(
       [
         ...highSub.slice(0, 10),
@@ -52,15 +48,14 @@ const getShortVideoForViewing = asyncHandler(async (req, res) => {
       ].map((video) => video._id.toString())
     );
 
-    // 4. Lọc lại danh sách theo ID duy nhất
+    // * Lọc các video bị trùng lặp
     const selectedVideos = publicShortVideos.filter((video) =>
       topVideos.has(video._id.toString())
     );
 
-    // 5. Shuffle (ngẫu nhiên)
+    // * Shuffle (ngẫu nhiên)
     const shuffledVideos = selectedVideos.sort(() => 0.5 - Math.random());
 
-    // 6. Phân trang
     const totalItems = shuffledVideos.length;
     const paginatedShorts = shuffledVideos.slice(skip, skip + limitNum);
     const hasMore = skip + limitNum < totalItems;
@@ -176,7 +171,6 @@ const getAllShortVideosForChannel = asyncHandler(async (req, res) => {
   }
 });
 
-// Lấy tất cả short videos theo userId
 const getAllShortVideosForUser = asyncHandler(async (req, res) => {
   const { userId } = req.params;
   const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
@@ -371,7 +365,7 @@ const getRandomShortVideoId = asyncHandler(async (req, res) => {
 /**
  * Tạo chuỗi ngẫu nhiên ổn định (deterministic) từ seed
  * Giúp shuffle cố định giữa các lần phân trang.
- */
+*/
 const deterministicShuffle = (ids, seed) => {
   return ids
     .map((id) => ({
@@ -546,6 +540,10 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
 
 const getShortVideoInfo = asyncHandler(async (req, res) => {
   const { shortVideoId } = req.params;
+
+  if (!shortVideoId) return res.status(400).json({ message: "Missing shortVideoId" });
+
+  if (!mongoose.Types.ObjectId.isValid(shortVideoId)) return res.status(400).json({ message: "Invalid shortVideoId" });
 
   try {
     const shortVideo = await ShortVideo.findById(shortVideoId)
@@ -782,12 +780,10 @@ const deleteShortVideo = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-  // getAllShortVideos,
   getShortVideoForViewing,
   getAllShortVideosForChannel,
   getAllShortVideosForUser,
   getRandomShortVideoId,
-  // getAllRandomShortVideoIDs,
   getFilteredShortVideoIds,
   getShortVideoInfo,
   createShortVideo,
