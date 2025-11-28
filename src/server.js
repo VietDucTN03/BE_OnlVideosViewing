@@ -34,7 +34,7 @@ connectDB();
 
 app.use(
   fileUpload({
-    createParentPath: true, // Đảm bảo đường dẫn cha được tạo nếu nó không tồn tại
+    createParentPath: true, // Ensure the parent path is created if it does not exist.
   })
 );
 

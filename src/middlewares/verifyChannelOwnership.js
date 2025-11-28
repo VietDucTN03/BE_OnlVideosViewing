@@ -4,7 +4,7 @@ const Channel = require("../models/user/channel");
 
 const verifyChannelOwnership = async (req, res, next) => {
   try {
-    console.log("⏩ Vào middleware verifyChannelOwnership");
+    console.log("Enter the verifyChannelOwnership middleware...");
     const token = req.cookies?.authToken;
 
     if (!token) {
@@ -15,13 +15,13 @@ const verifyChannelOwnership = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
 
-    // Lấy user
+    // Get user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Lấy channelId từ params, body hoặc query
+    // Get channelId from params, body or query
     const channelId = req.params.channelId || req.query.channelId;
 
     if (!channelId) {
@@ -34,7 +34,7 @@ const verifyChannelOwnership = async (req, res, next) => {
       return res.status(404).json({ message: "Channel not found" });
     }
 
-    // Kiểm tra quyền sở hữu
+    // Check ownership
     if (!channel.owner.equals(user._id)) {
       return res.status(403).json({ message: "Not authorized to edit this channel" });
     }
@@ -42,7 +42,7 @@ const verifyChannelOwnership = async (req, res, next) => {
     req.user = user;
     req.channel = channel;
 
-    console.log("Check thành cộng tại middleware verifyChannelOwnership ✅, vào next");
+    console.log("Check the success at verifyChannelOwnership middleware, go to next middleware...");
 
     next();
   } catch (error) {

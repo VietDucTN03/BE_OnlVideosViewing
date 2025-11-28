@@ -4,5 +4,5 @@ module.exports = (err, req, res, next) => {
   }
 
   console.error(err);
-  res.status(500).json({ message: "Lỗi server" });
+  res.status(500).json({ message: "Server error" });
 };

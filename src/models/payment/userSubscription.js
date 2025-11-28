@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// ** Lịch sử đăng ký gói của kênh.
+// ** Channel package subscription history.
 
 const userSubscriptionSchema = new mongoose.Schema(
     {
@@ -26,7 +26,7 @@ const userSubscriptionSchema = new mongoose.Schema(
             type: Date,
             required: true
         },
-        // autoRenew: {    // ? Tự động gia hạn.
+        // autoRenew: {
         //     type: Boolean,
         //     // default: true
         // },

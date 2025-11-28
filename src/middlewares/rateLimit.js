@@ -6,7 +6,7 @@ const generalLimiter = rateLimit({
   handler: (req, res, next) => {
     next({
       status: 429,
-      message: "Bạn gửi quá nhiều yêu cầu, vui lòng thử lại sau."
+      message: "You sent too many requests, please try again later."
     });
   },
 });
@@ -17,7 +17,7 @@ const loginLimiter = rateLimit({
   handler: (req, res, next) => {
     next({
       status: 429,
-      message: "Quá nhiều lần đăng nhập, vui lòng đợi 1 phút."
+      message: "Too many login attempts, please wait 1 minute."
     });
   },
 });
@@ -28,7 +28,7 @@ const adminLimiter = rateLimit({
   handler: (req, res, next) => {
     next({
       status: 429,
-      message: "Quá nhiều yêu cầu admin."
+      message: "Too many admin requests."
     });
   },
 });

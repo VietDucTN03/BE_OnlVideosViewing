@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// ** Phương thức thanh toán.
+// ** Payment method.
 
 const paymentSchema = new mongoose.Schema(
     {
@@ -33,7 +33,7 @@ const paymentSchema = new mongoose.Schema(
             type: String,
             unique: true
         },
-        paymentMeta: {   // ? Thông tin tùy theo phương thức.
+        paymentMeta: {   // ? Information depends on the method.
             type: Object,
             default: {}
         },

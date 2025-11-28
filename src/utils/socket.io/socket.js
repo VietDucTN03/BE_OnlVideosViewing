@@ -18,31 +18,31 @@ const io = new Server(httpServer, {
 });
 
 io.on("connection", (socket) => {
-  console.log(`👋🏻 ${socket.id} has joined the connection.`);
+  console.log(`${socket.id} has joined the connection.`);
 
   // Server sends an event to all clients
   io.emit("send-socket-id", socket.id);
 
   socket.on("disconnect", () => {
-    console.log(`👋🏻 ${socket.id} has disconnected.`);
+    console.log(`${socket.id} has disconnected.`);
   });
 
   socket.on("user-login", async ({ userId }) => {
     try {
       socket.join(userId);
-      console.log(`✅ User ${userId} đã join phòng cá nhân ${userId}`);
+      console.log(`User ${userId} has joined personal room ${userId}`);
     } catch (err) {
-      console.error("❌ Lỗi khi join phòng channel sau login:", err);
+      console.error("Error when joining channel room after login:", err);
     }
   });
 
   socket.on("subscribe-channel", async ({ channelId, userId }) => {
     if (channelId !== userId) {
       socket.join(channelId);
-      console.log(`👉 User ${userId} joined room: ${channelId}`);
+      console.log(`User ${userId} joined room: ${channelId}`);
     } else {
       console.log(
-        `⚠️ User ${userId} không cần join kênh chính họ (${channelId})`
+        `User ${userId} does not need to join their own channel (${channelId})`
       );
     }
 
@@ -52,28 +52,28 @@ io.on("connection", (socket) => {
       const user = await Channel.findById(userId);
 
       if (!channel) {
-        console.log("Kênh không tồn tại");
+        console.log("Channel does not exist");
         return;
       }
 
       if (!user) {
-        console.log("User không tồn tại");
+        console.log("User does not exist");
         return;
       }
 
-      // Phát sự kiện thông báo đến tất cả các client trong kênh
+      // Broadcast notification events to all clients in the channel
       io.to(channelId).emit("notification-sub-successful", {
         channelId,
         userId,
       });
     } catch (error) {
-      console.error("Lỗi khi xử lý subscribe-channel:", error);
+      console.error("Error processing subscribe-channel:", error);
     }
   });
 
   socket.on("unsubscribe-channel", ({ channelId, userId }) => {
     socket.leave(channelId);
-    console.log("👉 Left room:", channelId);
+    console.log("Left room:", channelId);
     // io.to(channelId).emit("new-unsubscription", {
     //   channelId,
     //   userId,

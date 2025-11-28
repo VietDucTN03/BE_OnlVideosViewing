@@ -37,7 +37,7 @@ const playlistSchema = new Schema(
     },
   },
   {
-    timestamps: true, // tự động thêm createdAt và updatedAt
+    timestamps: true,
   }
 );
 

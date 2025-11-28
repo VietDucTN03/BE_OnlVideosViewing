@@ -13,10 +13,10 @@ const getVideoDuration = (videoPath) => {
           const totalSeconds = hours * 3600 + minutes * 60 + seconds;
           resolve(totalSeconds);
         } else {
-          reject(new Error("Không thể lấy thời lượng video"));
+          reject(new Error("Unable to get video duration"));
         }
       } else {
-        reject(new Error("ffmpeg không trả về output mong muốn"));
+        reject(new Error("ffmpeg not returning desired output"));
       }
     });
   });

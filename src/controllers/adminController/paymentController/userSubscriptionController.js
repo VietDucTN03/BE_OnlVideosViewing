@@ -67,7 +67,7 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
 
         const hasMore = skip + history.length < filteredTotal;
 
-        // * Nếu tất cả subscriptionId null hoặc gói không active
+        // * If all subscriptionId null or package is not active
         const allInvalid = history.every(
             (sub) => !sub.subscriptionId || sub.subscriptionId.isActive === false
         );
@@ -83,7 +83,7 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
                 hasMore,
                 sort,
                 status,
-                message: "Gói đã bị xóa hoặc hủy.",
+                message: "The package has been deleted or canceled.",
             });
         }
 
@@ -98,7 +98,7 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
                 hasMore: false,
                 sort,
                 status,
-                message: "Người dùng này chưa từng đăng ký gói nào.",
+                message: "This user has never subscribed to any package.",
             });
         }
 
@@ -115,7 +115,7 @@ const getUserSubscriptionHistory = asyncHandler(async (req, res) => {
             status,
         });
     } catch (error) {
-        console.error("❌ Error fetching subscription history:", error);
+        console.error("Error fetching subscription history:", error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch subscription history",
@@ -130,19 +130,19 @@ const getUserSubscription = asyncHandler(async (req, res) => {
     if (!userId || !userSubscriptionId) {
         return res.status(400).json({
             success: false,
-            message: "Thiếu userId hoặc userSubscriptionId."
+            message: "Missing user Id or user SubscriptionId."
         });
     }
 
     if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(userSubscriptionId)) {
         return res.status(400).json({
             success: false,
-            message: "Định dạng userId hoặc userSubscriptionId không hợp lệ."
+            message: "Invalid user Id or user SubscriptionId format."
         });
     }
 
     try {
-        // Lấy dữ liệu song song: UserSubscription + Channel
+        // Get data in parallel: UserSubscription + Channel
         const [userSub, channel] = await Promise.all([
             UserSubscription.findOne({
                 _id: new mongoose.Types.ObjectId(userSubscriptionId),
@@ -160,21 +160,21 @@ const getUserSubscription = asyncHandler(async (req, res) => {
         if (!userSub) {
             return res.status(404).json({
                 success: false,
-                message: "Không tìm thấy subscription hoặc không có quyền truy cập."
+                message: "No subscription found or no access."
             });
         }
 
         return res.status(200).json({
             success: true,
-            message: "Lấy chi tiết subscription thành công.",
+            message: "Get subscription details successfully.",
             subscription: userSub,
             channel: channel || null
         });
     } catch (error) {
-        console.error("❌ Lỗi khi lấy chi tiết userSubscription:", error);
+        console.error("Error while getting userSubscription details:", error);
         return res.status(500).json({
             success: false,
-            message: "Lỗi server khi lấy chi tiết userSubscription.",
+            message: "Server error while retrieving userSubscription details.",
             error: error.message
         });
     }
@@ -186,7 +186,7 @@ const cancelUserSubscription = asyncHandler(async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(userSubscriptionId)) {
         return res.status(400).json({
             success: false,
-            message: "Invalid userId hoặc userSubscriptionId format.",
+            message: "Invalid userId or userSubscriptionId format.",
         });
     }
 
@@ -199,14 +199,14 @@ const cancelUserSubscription = asyncHandler(async (req, res) => {
         if (!userSub) {
             return res.status(404).json({
                 success: false,
-                message: "Không tìm thấy gói đăng ký.",
+                message: "No subscription found.",
             });
         }
 
         if (userSub.status !== "active") {
             return res.status(400).json({
                 success: false,
-                message: "Gói đăng ký này không còn hoạt động để hủy.",
+                message: "This subscription is no longer active for cancellation.",
             });
         }
 
@@ -228,14 +228,14 @@ const cancelUserSubscription = asyncHandler(async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Hủy gói đăng ký thành công.",
+            message: "Cancel subscription successfully.",
             subscription: userSub,
         });
     } catch (error) {
-        console.error("❌ Lỗi khi hủy gói đăng ký:", error);
+        console.error("Error when canceling subscription:", error);
         return res.status(500).json({
             success: false,
-            message: "Đã xảy ra lỗi trong quá trình hủy gói đăng ký.",
+            message: "An error occurred while canceling the subscription.",
             error: error.message,
         });
     }

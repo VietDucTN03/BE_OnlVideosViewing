@@ -170,7 +170,6 @@ const getAllVideos = asyncHandler(async (req, res) => {
 const getVideoById = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
-  // Kiểm tra ID hợp lệ
   if (!mongoose.Types.ObjectId.isValid(videoId)) {
     return res.status(400).json({ message: "Invalid video ID" });
   }
@@ -224,21 +223,17 @@ const getReportsByVideoId = asyncHandler(async (req, res) => {
   const limit = 5;
   const skip = (pageNum - 1) * limit;
 
-  // Tạo điều kiện truy vấn
   const query = {
     contentId: videoId,
     contentType: "Video",
   };
 
-  // Lọc theo trạng thái xử lý
   if (["valid", "invalid", "pending"].includes(resolvedResult)) {
     query.resolvedResult = resolvedResult;
   }
 
-  // Đếm tổng số report thỏa điều kiện
   const totalReports = await ReportReview.countDocuments(query);
 
-  // Lấy danh sách report phân trang
   const reports = await ReportReview.find(query)
     .populate("reporters", "nameChannel avatarChannel")
     // .populate("reportedChannel", "nameChannel avatarChannel")
@@ -256,7 +251,7 @@ const getReportsByVideoId = asyncHandler(async (req, res) => {
       limit,
       resolvedResult: resolvedResult || "all",
       reports: [],
-      message: "Không có report nào cho video này",
+      message: "There are no reports for this video.",
     });
   }
 
@@ -298,19 +293,19 @@ const deleteVideoById = asyncHandler(async (req, res) => {
 
   const video = await Video.findById(videoId);
   if (!video) {
-    return res.status(404).json({ message: "Video không tồn tại" });
+    return res.status(404).json({ message: "Video does not exist" });
   }
 
   await deleteFromCloudinary(video.url, "video");
   await deleteFromCloudinary([video.thumbnail], "image");
 
-  // Gỡ video khỏi tất cả playlist chứa nó
+  // Remove the video from all playlists containing it
   await Playlist.updateMany(
     { "videos.video": video._id },
     { $pull: { videos: { video: video._id } } }
   );
 
-  // Cập nhật Channel: xoá video khỏi danh sách và giảm videoTotal
+  // Update Channel: remove video from list and reduce videoTotal
   await Channel.updateOne(
     { _id: video.uploader },
     {
@@ -323,7 +318,7 @@ const deleteVideoById = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     videoId: video._id,
-    message: `Đã xóa video "${video.title}" thành công`,
+    message: `Video "${video.title}" deleted successfully`,
   });
 });
 

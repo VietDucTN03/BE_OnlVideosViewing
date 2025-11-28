@@ -14,7 +14,7 @@ const getRecommendedVideos = asyncHandler(async (req, res) => {
       userId = null,
       sortCategory = "all",
       page = 1,
-      seed = null, // <-- seed nhận từ FE
+      seed = null, // <-- seed received from FE
     } = req.query;
 
     // console.log("seed: ", seed);
@@ -85,7 +85,7 @@ const getRecommendedVideos = asyncHandler(async (req, res) => {
       });
     }
 
-    // Tính toán top videos
+    // Calculate top videos
     const highSub = [...videos].sort(
       (a, b) =>
         (b.uploader?.subscribersCount || 0) -
@@ -106,7 +106,7 @@ const getRecommendedVideos = asyncHandler(async (req, res) => {
       ].map((video) => video._id.toString())
     );
 
-    // Shuffle phần còn lại theo seed
+    // Shuffle the rest according to the seed
     const rng = seedrandom(seed || "default");
 
     const allVideos = [...videos].map((video) => {
@@ -136,9 +136,9 @@ const getRecommendedVideos = asyncHandler(async (req, res) => {
       seed: seed || Date.now().toString(),
     });
   } catch (err) {
-    console.error("Lỗi khi lấy video:", err);
+    console.error("Error while getting video:", err);
     res.status(500).json({
-      message: "Lỗi server khi lấy video",
+      message: "Server error when getting video",
       error: err.message,
     });
   }
@@ -246,7 +246,7 @@ const getAllChannelVideos = asyncHandler(async (req, res) => {
       sort,
     });
   } catch (err) {
-    console.error("❌ Error fetching public videos by channelId:", err);
+    console.error("Error fetching public videos by channelId:", err);
     res.status(500).json({
       message: "Server error while fetching channel videos.",
       error: err.message,
@@ -349,7 +349,7 @@ const getAllUserVideos = asyncHandler(async (req, res) => {
       sort,
     });
   } catch (err) {
-    console.error("❌ Error fetching public videos by channelId:", err);
+    console.error("Error fetching public videos by channelId:", err);
     res.status(500).json({
       message: "Server error while fetching channel videos.",
       error: err.message,
@@ -366,7 +366,7 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
   const limitNum = parseInt(limit);
   const skip = (pageNum - 1) * limitNum;
 
-  // 1. Lấy video hiện tại
+  // 1. Get current video
   const currentVideo = await Video.findById(videoId)
     .populate(
       "uploader",
@@ -386,11 +386,11 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
   }
 
   const queryBase = {
-    _id: { $ne: videoId }, // 👈 TRỪ video đang xem
-    isPrivate: false, // 👈 CHỈ lấy video công khai
+    _id: { $ne: videoId }, // MINUS the video being watched
+    isPrivate: false, // ONLY take public videos
   };
 
-  // 2. Video liên quan theo category, title, uploader
+  // 2. Related videos by category, title, uploader
   const relatedByCategoryOrTitleOrUploader = await Video.find({
     ...queryBase,
     $or: [
@@ -405,7 +405,7 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
     ],
   });
 
-  // 3. Video top view/like/comment (công khai)
+  // 3. Video top view/like/comment (public)
   const publicVideos = await Video.find(queryBase)
     .populate("uploader", "subscribersCount")
     .select(
@@ -423,7 +423,7 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
     .sort((a, b) => (b.commentTotal || 0) - (a.commentTotal || 0))
     .slice(0, 10);
 
-  // 4. Gộp các video liên quan
+  // 4. Merge related videos
   const relatedSet = new Set([
     ...relatedByCategoryOrTitleOrUploader.map((v) => v._id.toString()),
     ...topByViews.map((v) => v._id.toString()),
@@ -431,7 +431,7 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
     ...topByComments.map((v) => v._id.toString()),
   ]);
 
-  // 5. Nếu đã đăng nhập và có userId hợp lệ → thêm video từ channel đã sub
+  // 5. If logged in and have a valid userId → add videos from the subscribed channel
   if (isLoggedIn === "true" && userId) {
     const userChannel = await Channel.findOne({ owner: userId });
     if (userChannel) {
@@ -443,7 +443,7 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
     }
   }
 
-  // 6. Lấy danh sách đầy đủ
+  // 6. Get the full list
   const finalRelated = await Video.find({
     _id: { $in: Array.from(relatedSet) },
   })
@@ -455,7 +455,7 @@ const getRelatedVideos = asyncHandler(async (req, res) => {
 
   // console.log("finalRelated: ", finalRelated);
 
-  // 7. Random và phân trang
+  // 7. Random and pagination
   const shuffled = finalRelated.sort(() => 0.5 - Math.random());
   const paginated = shuffled.slice(skip, skip + limitNum);
 
@@ -491,7 +491,7 @@ const getVideoInfo = asyncHandler(async (req, res) => {
     res.status(200).json(video);
   } catch (error) {
     console.error("Error fetching video:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -509,14 +509,14 @@ const editVideo = asyncHandler(async (req, res) => {
     // console.log("Thumbnail: ", video.thumbnail);
     // console.log("thumbnailUrl: ", thumbnailUrl);
 
-    // Kiểm tra và cập nhật thumbnail
+    // Check and update thumbnail
     if (thumbnailUrl && thumbnailUrl !== video.thumbnail) {
-      // Xóa thumbnail cũ khỏi Cloudinary
+      // Delete old thumbnails from Cloudinary
       await deleteFromCloudinary([video.thumbnail], "image");
       video.thumbnail = thumbnailUrl;
     }
 
-    // Cập nhật các trường khác nếu có
+    // Update other fields if any
     if (title !== undefined) video.title = title;
     if (description !== undefined) video.description = description;
     if (Array.isArray(categories)) video.category = categories;
@@ -531,9 +531,9 @@ const editVideo = asyncHandler(async (req, res) => {
       updatedVideo: video,
     });
   } catch (err) {
-    console.error("❌ Lỗi khi chỉnh sửa video:", err);
+    console.error("Error while editing video:", err);
     res.status(500).json({
-      message: "Lỗi server khi chỉnh sửa video",
+      message: "Server error while editing video",
       error: err.message,
     });
   }

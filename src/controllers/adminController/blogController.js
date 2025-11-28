@@ -216,21 +216,17 @@ const getReportsByBlogId = asyncHandler(async (req, res) => {
     const limit = 5;
     const skip = (pageNum - 1) * limit;
 
-    // Tạo điều kiện truy vấn
     const query = {
         contentId: blogId,
         contentType: "Blog",
     };
 
-    // Lọc theo trạng thái xử lý
     if (["valid", "invalid", "pending"].includes(resolvedResult)) {
         query.resolvedResult = resolvedResult;
     }
 
-    // Đếm tổng số report thỏa điều kiện
     const totalReports = await ReportReview.countDocuments(query);
 
-    // Lấy danh sách report phân trang
     const reports = await ReportReview.find(query)
         .populate("reporters", "nameChannel avatarChannel")
         // .populate("reportedChannel", "nameChannel avatarChannel")

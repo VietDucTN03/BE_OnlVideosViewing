@@ -1,5 +1,5 @@
 const getWeekLabels = (startDate) => {
-    const weekdays = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
+    const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     return Array.from({ length: 7 }, (_, i) => {
         const d = new Date(startDate);
         d.setDate(startDate.getDate() + i);
@@ -9,7 +9,7 @@ const getWeekLabels = (startDate) => {
 
 const getMonthLabels = (daysInMonth) => {
     const weeks = Math.ceil(daysInMonth / 7);
-    return Array.from({ length: weeks }, (_, i) => `Tuần ${i + 1}`);
+    return Array.from({ length: weeks }, (_, i) => `Week ${i + 1}`);
 };
 
 const formatDate = (date) => {

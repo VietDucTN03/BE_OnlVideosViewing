@@ -136,7 +136,7 @@ const getReportReviewById = asyncHandler(async (req, res) => {
         return res.status(400).json({ message: "Invalid report id" });
     }
 
-    // Tìm reportReview và populate dữ liệu channel
+    // Find reportReview and populate channel data
     const report = await ReportReview.findById(reportId)
         .populate({
             path: "reporters",
@@ -257,16 +257,16 @@ const resolveReportReview = asyncHandler(async (req, res) => {
     }
 
     if (!["valid", "invalid"].includes(result)) {
-        return res.status(400).json({ message: "Kết quả phải là 'valid' hoặc 'invalid'" });
+        return res.status(400).json({ message: "The result must be 'valid' or 'invalid'" });
     }
 
     const report = await ReportReview.findById(reportId);
     if (!report) {
-        return res.status(404).json({ message: "Report không tồn tại" });
+        return res.status(404).json({ message: "Report does not exist" });
     }
 
     if (report.resolvedResult !== "pending") {
-        return res.status(400).json({ message: "Report đã được xử lý trước đó" });
+        return res.status(400).json({ message: "Report has been processed before" });
     }
 
     let Model;
@@ -285,15 +285,13 @@ const resolveReportReview = asyncHandler(async (req, res) => {
             uploaderField = "author";
             break;
         default:
-            return res.status(400).json({ message: "Loại nội dung không hợp lệ" });
+            return res.status(400).json({ message: "Invalid content type" });
     }
 
-    // Cập nhật trạng thái report
     report.resolvedResult = result;
     report.isResolved = true;
     await report.save();
 
-    // Giảm reportReviewCount và (nếu valid) tăng reportCount
     const updateFields = { $inc: { reportReviewCount: -1 } };
     if (result === "valid") {
         updateFields.$inc.reportCount = 1;
@@ -304,7 +302,6 @@ const resolveReportReview = asyncHandler(async (req, res) => {
         updateFields
     );
 
-    // Nếu valid, check thêm để xử lý violationStatus & isBanned
     if (result === "valid") {
         const content = await Model.findById(report.contentId);
         if (content) {
@@ -316,7 +313,7 @@ const resolveReportReview = asyncHandler(async (req, res) => {
         reportId: report._id,
         contentId: report.contentId,
         resolvedResult: report.resolvedResult,
-        message: `Đã cập nhật kết quả xử lý report của ${report.contentType} là "${result}"`,
+        message: `Updated the report processing result of ${report.contentType} to "${result}"`,
     });
 });
 
@@ -327,5 +324,3 @@ module.exports = {
     // resolveVideoReport,
     resolveReportReview,
 };
-
-// * hàm gửi Cảnh báo đến tài khoản (thêm số lần bị ăn gậy, 3 lần = ban) theo kiểu email

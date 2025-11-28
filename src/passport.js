@@ -21,7 +21,7 @@ passport.use(
 
         const email = profile.emails[0].value;
 
-        // * Tìm hoặc tạo người dùng
+        // * Find or create a user
         // const user = await User.findOneAndUpdate(
         //   { email },
         //   {
@@ -51,7 +51,7 @@ passport.use(
         if (!user.channel) {
           const channel = await Channel.create({ owner: user._id });
 
-          // * Cập nhật user với channel vừa tạo
+          // * Update user with newly created channel
           user.channel = channel._id;
           await user.save();
         }

@@ -9,7 +9,7 @@ const getAllBlogsByUserId = asyncHandler(async (req, res) => {
   const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
 
   if (!userId) {
-    return res.status(400).json({ message: "Thiếu userId." });
+    return res.status(400).json({ message: "Missing userId." });
   }
 
   const pageNum = parseInt(page, 10);
@@ -99,7 +99,7 @@ const getAllBlogsByUserId = asyncHandler(async (req, res) => {
       sort,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy blog theo userId:", error);
+    console.error("Error when getting blog by userId:", error);
     res
       .status(500)
       .json({
@@ -114,7 +114,7 @@ const getAllBlogsByChannelId = asyncHandler(async (req, res) => {
   const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
 
   if (!channelId) {
-    return res.status(400).json({ message: "Thiếu channelId." });
+    return res.status(400).json({ message: "Missing channelId." });
   }
 
   const pageNum = parseInt(page);
@@ -200,7 +200,7 @@ const getAllBlogsByChannelId = asyncHandler(async (req, res) => {
       sort,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy blog theo channelId:", error);
+    console.error("Error when getting blog by channelId:", error);
     res
       .status(500)
       .json({
@@ -214,11 +214,11 @@ const getBlogInfo = asyncHandler(async (req, res) => {
   const { blogId } = req.params;
 
   if (!blogId) {
-    return res.status(400).json({ message: "Thiếu blogId." });
+    return res.status(400).json({ message: "Missing channelId." });
   }
 
   if (!mongoose.Types.ObjectId.isValid(blogId)) {
-    return res.status(400).json({ message: "blogId không hợp lệ." });
+    return res.status(400).json({ message: "Invalid blogId format" });
   }
 
   const blog = await Blog.findById(blogId)
@@ -295,7 +295,7 @@ const createBlog = asyncHandler(async (req, res) => {
       blog: newBlog,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi tạo blog:", error);
+    console.error("Error when creating blog:", error);
     next(error);
   }
 });
@@ -305,7 +305,7 @@ const editBlog = asyncHandler(async (req, res) => {
   const { title, content, blogImgs, categories, isPrivate } = req.body;
 
   if (!blogId) {
-    return res.status(400).json({ message: "Thiếu blogId." });
+    return res.status(400).json({ message: "Missing blogId." });
   }
 
   const blog = await Blog.findById(blogId);
@@ -314,7 +314,7 @@ const editBlog = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "No blog found." });
   }
 
-  // Kiểm tra các trường hợp có truyền vào thì mới cập nhật
+  // Check the cases that have been transmitted before updating.
   if (title !== undefined) blog.title = title;
   if (content !== undefined) blog.content = content;
 
@@ -348,7 +348,7 @@ const deleteBlog = asyncHandler(async (req, res) => {
   const { blogId } = req.params;
 
   if (!blogId) {
-    return res.status(400).json({ message: "Thiếu blogId." });
+    return res.status(400).json({ message: "Missing blogId." });
   }
 
   const blog = await Blog.findById(blogId);

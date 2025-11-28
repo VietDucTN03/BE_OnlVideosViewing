@@ -18,7 +18,7 @@ const deleteFromCloudinary = async (mediaUrls, resourceType = "image") => {
       try {
         const uploadIndex = url.indexOf("/upload/");
         if (uploadIndex === -1) {
-          console.warn("Không tìm thấy '/upload/' trong URL:", url);
+          console.warn("'/upload/' not found in URL:", url);
           return;
         }
 
@@ -33,11 +33,11 @@ const deleteFromCloudinary = async (mediaUrls, resourceType = "image") => {
         const publicId = [...parts, filenameNoExt].join("/");
 
         if (!publicId) {
-          console.warn("Không thể xác định public_id từ URL:", url);
+          console.warn("Unable to determine public_id from URL:", url);
           return;
         }
 
-        console.log("🪪 Đang xóa Cloudinary:", publicId);
+        console.log("Deleting Cloudinary:", publicId);
 
         await cloudinary.uploader.destroy(publicId, {
           resource_type: resourceType,
@@ -45,9 +45,9 @@ const deleteFromCloudinary = async (mediaUrls, resourceType = "image") => {
           invalidate: true,
         });
 
-        console.log(`✅ Đã xóa ${resourceType}: ${publicId}`);
+        console.log(`Deleted ${resourceType}: ${publicId}`);
       } catch (err) {
-        console.error(`❌ Lỗi khi xóa ${resourceType}:`, err);
+        console.error(`Error deleting ${resourceType}:`, err);
       }
     })
   );

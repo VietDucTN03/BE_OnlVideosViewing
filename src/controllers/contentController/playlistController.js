@@ -101,7 +101,7 @@ const getPlaylistsByUserId = asyncHandler(async (req, res) => {
       sort,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy playlist theo userId:", error);
+    console.error("Error when getting playlist by userId:", error);
     res
       .status(500)
       .json({
@@ -213,7 +213,7 @@ const getPlaylistsByChannelId = asyncHandler(async (req, res) => {
       sort,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy playlist theo channelId:", error);
+    console.error("Error when getting playlist by channelId:", error);
     res
       .status(500)
       .json({

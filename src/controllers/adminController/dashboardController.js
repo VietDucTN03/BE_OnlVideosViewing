@@ -11,24 +11,24 @@ const { getWeekLabels, getMonthLabels, getPeriodTextForWeekOrMonth, getTimeRange
 
 const getSystemStats = asyncHandler(async (req, res) => {
     try {
-        // 📌 User/Account
+        // User/Account
         const totalAccounts = await User.countDocuments();
         const blockedAccounts = await User.countDocuments({ isBlocked: true });
         const normalAccounts = totalAccounts - blockedAccounts;
 
-        // 📌 Videos
+        // Videos
         const videoTotal = await Video.countDocuments();
         const videoNormal = await Video.countDocuments({ violationStatus: "normal" });
         const videoWarning = await Video.countDocuments({ violationStatus: "warning" });
         const videoBanned = await Video.countDocuments({ violationStatus: "banned" });
 
-        // 📌 Shorts
+        // Shorts
         const shortTotal = await ShortVideo.countDocuments();
         const shortNormal = await ShortVideo.countDocuments({ violationStatus: "normal" });
         const shortWarning = await ShortVideo.countDocuments({ violationStatus: "warning" });
         const shortBanned = await ShortVideo.countDocuments({ violationStatus: "banned" });
 
-        // 📌 Blogs
+        // Blogs
         const blogTotal = await Blog.countDocuments();
         const blogNormal = await Blog.countDocuments({ violationStatus: "normal" });
         const blogWarning = await Blog.countDocuments({ violationStatus: "warning" });
@@ -277,7 +277,7 @@ const getViewStatsByFilter = asyncHandler(async (req, res) => {
         const shortData = [];
 
         for (let m = startMonth; m <= Math.min(endMonth, currentMonth); m++) {
-            labels.push(`Tháng ${m}`);
+            labels.push(`Month ${m}`);
             videoData.push(videoStats.find(v => v._id === m)?.total || 0);
             shortData.push(shortStats.find(s => s._id === m)?.total || 0);
         }
@@ -319,7 +319,7 @@ const getCommentStatsByFilter = asyncHandler(async (req, res) => {
         const shortData = [];
 
         for (let m = startMonth; m <= Math.min(endMonth, currentMonth); m++) {
-            labels.push(`Tháng ${m}`);
+            labels.push(`Month ${m}`);
             blogData.push(blogStats.find(s => s._id === m)?.total || 0);
             videoData.push(videoStats.find(s => s._id === m)?.total || 0);
             shortData.push(shortStats.find(s => s._id === m)?.total || 0);
