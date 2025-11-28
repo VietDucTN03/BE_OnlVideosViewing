@@ -24,15 +24,15 @@ const createTransactionMomo = asyncHandler(async (req, res) => {
 
     console.log("Data from client: ", req.body);
 
-    // 1. Lấy thông tin gói subscription
+    // 1. Get subscription package information
     const subscription = await Subscription.findById(subscriptionId);
     if (!subscription) {
         return res.status(404).json({ message: "Subscription not found" });
     }
     const amount = subscription.price;
 
-    // 2. Tạo dữ liệu gửi MoMo
-    const orderInfo = `Thanh toán gói ${subscription.name}`;
+    // 2. Create data to send to MoMo
+    const orderInfo = `Pay for package ${subscription.name}`;
     const redirectUrl = `${urlNgrok || urlServer}/api/payment/momo/return`;
     const ipnUrl = `${urlNgrok || urlServer}/api/payment/momo/callback`;
     const requestType = "payWithMethod";
@@ -85,7 +85,7 @@ const createTransactionMomo = asyncHandler(async (req, res) => {
     try {
         const result = await axios.request(options);
 
-        // 3. Tạo payment pending
+        // 3. Create Payment
         await Payment.create({
             userId,
             subscriptionId,
@@ -107,7 +107,7 @@ const createTransactionMomo = asyncHandler(async (req, res) => {
 const momoReturn = asyncHandler(async (req, res) => {
     const q = req.query;
 
-    // verify chữ ký như cũ...
+    // verify signature as before...
     const raw = `accessKey=${accessKeyMomo}`
         + `&amount=${q.amount}`
         + `&extraData=${q.extraData || ''}`
@@ -130,7 +130,7 @@ const momoReturn = asyncHandler(async (req, res) => {
         return res.redirect(302, `${urlClient}?success=false`);
     }
 
-    // ** Lấy lại Payment
+    // ** Get Back Payment
     const payment = await Payment.findOne({ transactionId: q.orderId })
         .populate('subscriptionId')
         .populate('userId', '_id name email')
@@ -140,7 +140,7 @@ const momoReturn = asyncHandler(async (req, res) => {
         return res.redirect(302, `${urlClient}?success=false&message=payment_not_found`);
     }
 
-    // ** Lấy thêm Channel
+    // ** Get more Channels
     const channel = await Channel.findOne({ owner: payment.userId }).lean();
 
     const reducedPayment = {
@@ -184,7 +184,7 @@ const momoReturn = asyncHandler(async (req, res) => {
 
     console.log("Payload: ", payload);
 
-    // Mã hóa an toàn URL (base64url)
+    // Secure URL encoding (base64url)
     const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
 
     console.log("Encoded: ", encoded);
@@ -212,7 +212,7 @@ const callbackMomo = asyncHandler(async (req, res) => {
                 return res.status(404).json({ message: "Subscription not found" });
             }
 
-            // ✅ Cộng 1 vào totalSubscribers
+            // Add 1 to total Subscribers
             await Subscription.findByIdAndUpdate(
                 payment.subscriptionId,
                 { $inc: { totalSubscribers: 1 } }

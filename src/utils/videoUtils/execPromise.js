@@ -1,10 +1,10 @@
-// Helper để chạy lệnh ffmpeg
+// Helper to run ffmpeg commands
 const execPromise = (command) => {
   return new Promise((resolve, reject) => {
     require("child_process").exec(command, (error, stdout, stderr) => {
       if (error) {
         console.error("Exec error: ", error);
-        console.error("stderr: ", stderr); // Log stderr để xem chi tiết lỗi
+        console.error("stderr: ", stderr); // Log stderr to see error details
         reject(`Error: ${error.message}`);
       } else {
         console.log("stdout: ", stdout);

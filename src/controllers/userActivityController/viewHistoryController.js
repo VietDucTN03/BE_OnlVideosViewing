@@ -7,7 +7,7 @@ const getViewHistoryByUserId = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 5;
 
   if (!userId) {
-    return res.status(400).json({ message: "Thiếu userId." });
+    return res.status(400).json({ message: "Missing userId." });
   }
 
   const viewHistory = await VideoViewHistory.findOne({ userId })
@@ -31,7 +31,7 @@ const getViewHistoryByUserId = asyncHandler(async (req, res) => {
     });
   }
 
-  // * Sắp xếp theo lastViewedAt giảm dần
+  // * Sort by lastViewedAt descending
   const sortedHistory = viewHistory.listVideoId.sort(
     (a, b) => new Date(b.lastViewedAt) - new Date(a.lastViewedAt)
   );

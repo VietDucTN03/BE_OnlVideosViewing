@@ -52,12 +52,12 @@ const createTransactionVnpay = asyncHandler(async (req, res) => {
             hashAlgorithm: "SHA512",
         });
 
-        // 3. Tạo URL thanh toán
+        // 1. Generate payment URL
         const paymentUrl = await vnpay.buildPaymentUrl({
             vnp_Amount: amount,
             vnp_IpAddr: clientIp,
             vnp_TxnRef: orderId,
-            vnp_OrderInfo: "Thanh toán đơn hàng #" + orderId,
+            vnp_OrderInfo: "Order payment #" + orderId,
             vnp_OrderType: "billpayment",
             vnp_ReturnUrl: `${urlServer || urlNgrok}/api/payment/vnpay/callback-vnpay?redirect=${encodeURIComponent(urlClient)}`,
             vnp_BankCode: "NCB",
@@ -83,7 +83,7 @@ const createTransactionVnpay = asyncHandler(async (req, res) => {
         return res.status(201).json({ orderId, amount, paymentUrl });
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ message: "Lỗi tạo URL thanh toán VNPay" });
+        return res.status(500).json({ message: "Error creating VNPay payment URL" });
     }
 });
 
@@ -111,7 +111,7 @@ const callbackVnpay = asyncHandler(async (req, res) => {
                 return res.status(404).json({ message: "Subscription not found" });
             }
 
-            // ✅ Cộng 1 vào totalSubscribers
+            // Add 1 to totalSubscribers
             await Subscription.findByIdAndUpdate(
                 payment.subscriptionId,
                 { $inc: { totalSubscribers: 1 } }
@@ -154,7 +154,7 @@ const callbackVnpay = asyncHandler(async (req, res) => {
                 channelId: channel?._id
             });
 
-            // ** Lấy lại Payment
+            // ** Get Back Payment
             const reducedPayment = {
                 _id: payment._id,
                 amount: payment.amount,
@@ -164,7 +164,7 @@ const callbackVnpay = asyncHandler(async (req, res) => {
                 paymentDate: payment.paymentDate
             };
 
-            // ** Lấy lại Subscription
+            // ** Get Back Subscription
             const sub = payment.subscriptionId || {};
             const reducedSubscription = {
                 _id: sub._id,
@@ -176,10 +176,10 @@ const callbackVnpay = asyncHandler(async (req, res) => {
 
             const usr = payment.userId || {};
 
-            // ** Lấy lại User
+            // ** Get Back User
             const reducedUser = { _id: usr._id, email: usr.email, name: usr.username };
 
-            // ** Lấy lại Channel
+            // ** Get Back Channel
             const reducedChannel = channel ? {
                 _id: channel._id,
                 avatarChannel: channel.avatarChannel,

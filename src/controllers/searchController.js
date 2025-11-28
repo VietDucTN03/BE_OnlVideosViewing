@@ -49,7 +49,7 @@ const getListOfSearchSuggestions = asyncHandler(async (req, res) => {
         .select("title commentTotal statusTotal"),
     ]);
 
-  // * Gán Type cho từng loại kết quả
+  // * Assign a Type to each result type
   const formattedResults = [
     ...videoResults.map((item) => ({
       type: "Video",
@@ -69,7 +69,7 @@ const getListOfSearchSuggestions = asyncHandler(async (req, res) => {
     })),
   ];
 
-  // * Loại bỏ trùng lặp theo `keyword`
+  // * Remove duplicates by `keyword`
   const uniqueResults = [];
   const seen = new Set();
 
@@ -114,7 +114,7 @@ const getSearchResults = asyncHandler(async (req, res) => {
     console.error("Failed to save search history:", err.message);
   }
 
-  // * Chuẩn hóa keyword 
+  // * Keyword standardization
   const looseRegex = buildLooseRegex(keyword);
 
   const perPage = 5;
@@ -164,7 +164,7 @@ const getSearchResults = asyncHandler(async (req, res) => {
     })
   );
 
-  // * Trộn + tính độ phù hợp
+  // * Mix + calculate suitability
   const sanitizeString = (str) => str.toLowerCase().replace(/[^a-z0-9]/gi, "");
   const normalizedKeyword = sanitizeString(keyword);
 

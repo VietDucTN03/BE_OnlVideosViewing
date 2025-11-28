@@ -53,7 +53,7 @@ const getAllAccounts = asyncHandler(async (req, res) => {
   let totalAccounts = await Channel.countDocuments(query);
 
   if (keyword) {
-    query.nameChannel = { $regex: keyword, $options: "i" };  // tìm không phân biệt hoa thường
+    query.nameChannel = { $regex: keyword, $options: "i" };  // case-insensitive
   }
 
   if (["normal", "warning", "banned"].includes(status)) {
@@ -150,17 +150,17 @@ const getAccountDetailByUserId = asyncHandler(async (req, res) => {
 
   const user = await User.findById(userId).select("-avatar -createdAt");
   if (!user) {
-    return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    return res.status(404).json({ message: "User not found." });
   }
 
-  // Tìm channel tương ứng (nếu có)
+  // Find the corresponding channel (if any)
   const channel = await Channel.findOne({ owner: userId }).select(
     "-owner -bannerChannel -subscribers -channelsSubscribed"
   );
   if (!channel) {
     return res
       .status(404)
-      .json({ message: "Không tìm thấy channel của user này" });
+      .json({ message: "This user's channel was not found." });
   }
 
   res.status(200).json({
@@ -193,12 +193,12 @@ const getAllVideosByChannelId = asyncHandler(async (req, res) => {
 
   const sort = sortOptions[sortType] || sortOptions.createdAtDesc;
 
-  // Đếm tổng video của channel
+  // Count total channel videos
   const totalVideos = await Video.countDocuments({ uploader: channelId });
 
   if (totalVideos === 0) {
     return res.status(200).json({
-      message: "Không có video nào.",
+      message: "There are no videos.",
       videos: [],
       page,
       limit,
@@ -209,7 +209,7 @@ const getAllVideosByChannelId = asyncHandler(async (req, res) => {
     });
   }
 
-  // Lấy video theo phân trang và sắp xếp
+  // Get videos by pagination and sort.
   const videos = await Video.find({ uploader: channelId })
     .sort(sort)
     .skip((page - 1) * limit)
@@ -248,7 +248,7 @@ const getAllShortVideosByChannelId = asyncHandler(async (req, res) => {
 
   if (totalShorts === 0) {
     return res.status(200).json({
-      message: "Không có short video nào.",
+      message: "There are no short videos.",
       shorts: [],
       page,
       limit,
@@ -296,7 +296,7 @@ const getAllBlogsByChannelId = asyncHandler(async (req, res) => {
 
   if (totalBlogs === 0) {
     return res.status(200).json({
-      message: "Không có blog nào.",
+      message: "There is no blog.",
       blogs: [],
       page,
       limit,
@@ -343,29 +343,24 @@ const getReportReviewsByChannel = asyncHandler(async (req, res) => {
   const limit = 5;
   const skip = (pageNum - 1) * limit;
 
-  // Query điều kiện cơ bản
   const query = {
     reportedChannel: channelId,
   };
 
-  // Filter contentType
   if (contentType && ["Video", "ShortVideo", "Blog"].includes(contentType)) {
     query.contentType = contentType;
   }
 
-  // Filter resolvedResult
   if (status && ["valid", "invalid", "pending"].includes(status)) {
     query.resolvedResult = status;
   }
 
-  // Filter isResolved
   if (resolved === "resolved") {
     query.isResolved = true;
   } else if (resolved === "unresolved") {
     query.isResolved = false;
   }
 
-  // Sắp xếp
   const sortOptions = {
     newest: { createdAt: -1 },
     oldest: { createdAt: 1 },
@@ -373,10 +368,8 @@ const getReportReviewsByChannel = asyncHandler(async (req, res) => {
   };
   const sortCondition = sortOptions[sort] || sortOptions.newest;
 
-  // Đếm tổng số report
   const totalReports = await ReportReview.countDocuments(query);
 
-  // Lấy danh sách report
   const reports = await ReportReview.find(query)
     .sort(sortCondition)
     .skip(skip)
@@ -384,7 +377,6 @@ const getReportReviewsByChannel = asyncHandler(async (req, res) => {
     .populate("reporters", "nameChannel avatarChannel")
     .lean();
 
-  // Kiểm tra còn trang sau không
   const hasMore = skip + limit < totalReports;
 
   res.status(200).json({
@@ -408,19 +400,16 @@ const blockUserIfChannelBanned = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Invalid user id" });
   }
 
-  // Tìm channel
   const channel = await Channel.findOne({ owner: userId });
   if (!channel) {
     return res.status(404).json({ message: "Không tìm thấy channel của user này." });
   }
 
-  // Kiểm tra violationStatus
   if (channel.violationStatus !== "banned") {
     console.log("Channel chưa bị banned. Không block user.");
     return res.status(400).json({ message: "Channel chưa bị banned. Không thể block user." });
   }
 
-  // Tìm user
   const user = await User.findById(userId);
   if (!user) {
     return res.status(404).json({ message: "Không tìm thấy user." });
@@ -431,36 +420,34 @@ const blockUserIfChannelBanned = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "User đã bị block từ trước." });
   }
 
-  // Block user
   user.isBlocked = true;
   await user.save();
 
-  // Gửi email
   await sendMail({
     from: `"Admin Metube" <${process.env.EMAIL_NAME}>`,
     email: user.email,
-    subject: "Tài khoản của bạn đã bị khóa",
+    subject: "Your account has been locked",
     html: `
       <div style="max-width:600px;margin:auto;font-family:sans-serif;border-radius:8px;overflow:hidden;background:#f0fdfa;">
         <div style="background:linear-gradient(90deg,#14b8a6,#06b6d4);color:white;padding:24px;text-align:center;">
           <h2 style="margin:0;font-size:24px;">Metube</h2>
         </div>
         <div style="padding:24px;">
-          <h3 style="color:#0f172a;margin-top:0;">Xin chào ${user.username},</h3>
+          <h3 style="color:#0f172a;margin-top:0;">Hello ${user.username},</h3>
           <p style="color:#334155;line-height:1.6;">
-            Chúng tôi rất tiếc phải thông báo rằng tài khoản của bạn đã bị 
-            <b style="color:#b91c1c;">khóa</b> vì kênh của bạn đã vi phạm các chính sách và đã bị <b>banned</b>.
+            We regret to inform you that your account has been 
+            <b style="color:#b91c1c;">locked</b> because your channel violated our policies and has been <b>banned</b>.
           </p>
           <p style="color:#334155;line-height:1.6;">
-            Nếu bạn cho rằng đây là nhầm lẫn, vui lòng liên hệ với đội hỗ trợ để được xem xét lại.
+            If you believe this is an error, please contact support for review.
           </p>
           <div style="text-align:center;margin:30px 0;">
             <a href="mailto:${process.env.EMAIL_NAME}" style="background:#14b8a6;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;display:inline-block;font-size:16px;">
-              ✉️ Liên hệ hỗ trợ
+              Contact support
             </a>
           </div>
           <p style="color:#64748b;font-size:14px;">
-            Cảm ơn bạn đã tin tưởng sử dụng dịch vụ của chúng tôi.
+            Thank you for trusting and using our services.
           </p>
         </div>
         <div style="background:#e0f2fe;color:#334155;padding:18px;text-align:center;font-size:13px;">
@@ -470,8 +457,8 @@ const blockUserIfChannelBanned = asyncHandler(async (req, res) => {
     `,
   });
 
-  console.log(`Đã block user ${user.username} và gửi email thông báo.`);
-  return res.status(200).json({ message: `Đã block user ${user.username} và gửi email thông báo.` });
+  console.log(`Blocked user ${user.username} and sent notification email.`);
+  return res.status(200).json({ message: `Blocked user ${user.username} and sent notification email.` });
 });
 
 const unblockUserIfChannelUnbanned = asyncHandler(async (req, res) => {
@@ -483,11 +470,11 @@ const unblockUserIfChannelUnbanned = asyncHandler(async (req, res) => {
 
   const user = await User.findById(userId);
   if (!user) {
-    return res.status(404).json({ message: "Không tìm thấy user." });
+    return res.status(404).json({ message: "User not found." });
   }
 
   if (!user.isBlocked) {
-    return res.status(400).json({ message: "User này hiện không bị block." });
+    return res.status(400).json({ message: "This user is not currently blocked." });
   }
 
   user.isBlocked = false;
@@ -504,7 +491,7 @@ const unblockUserIfChannelUnbanned = asyncHandler(async (req, res) => {
   await sendMail({
     from: `"Admin Metube" <${process.env.EMAIL_NAME}>`,
     email: user.email,
-    subject: "Tài khoản của bạn đã được mở khóa",
+    subject: "Your account has been unlocked",
     html: `
       <div style="max-width:600px;margin:auto;font-family:sans-serif;border-radius:8px;overflow:hidden;background:#ecfdf5;">
         <div style="background:linear-gradient(90deg,#22c55e,#10b981);color:white;padding:24px;text-align:center;">
@@ -513,19 +500,19 @@ const unblockUserIfChannelUnbanned = asyncHandler(async (req, res) => {
         <div style="padding:24px;">
           <h3 style="color:#0f172a;margin-top:0;">Xin chào ${user.username},</h3>
           <p style="color:#334155;line-height:1.6;">
-            Chúng tôi xin thông báo rằng tài khoản của bạn đã được 
-            <b style="color:#15803d;">mở khóa</b> và bạn có thể tiếp tục sử dụng dịch vụ của chúng tôi.
+            We would like to inform you that your account has been  
+            <b style="color:#15803d;">unlocked</b> and you can continue to use our services.
           </p>
           <p style="color:#334155;line-height:1.6;">
-            Cảm ơn bạn đã hợp tác và tuân thủ các chính sách cộng đồng.
+            Thank you for your cooperation and compliance with community policies.
           </p>
           <div style="text-align:center;margin:30px 0;">
             <a href="${process.env.CLIENT_URL}" style="background:#22c55e;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;display:inline-block;font-size:16px;">
-              🎉 Đăng nhập ngay
+              Sign in now
             </a>
           </div>
           <p style="color:#64748b;font-size:14px;">
-            Chúc bạn có trải nghiệm tuyệt vời tại nền tảng của chúng tôi.
+            We hope you have a great experience on our platform.
           </p>
         </div>
         <div style="background:#d1fae5;color:#065f46;padding:18px;text-align:center;font-size:13px;">
@@ -535,8 +522,8 @@ const unblockUserIfChannelUnbanned = asyncHandler(async (req, res) => {
     `,
   });
 
-  console.log(`Đã gỡ block cho user ${user.username} và gửi email thông báo.`);
-  return res.status(200).json({ message: `Đã gỡ block cho user ${user.username} và gửi email thông báo.` });
+  console.log(`Unblocked user ${user.username} and sent notification email.`);
+  return res.status(200).json({ message: `Unblocked user ${user.username} and sent notification email.` });
 });
 
 module.exports = {

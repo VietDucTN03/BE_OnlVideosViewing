@@ -34,7 +34,7 @@ const getAllCommentByVideoId = asyncHandler(async (req, res) => {
   const comments = await Comment.find({
     refId: videoId,
     refType: "Video",
-    parentComment: null, // chỉ lấy comment gốc
+    parentComment: null, // only take original comments
   })
     .sort(sortCondition)
     .skip(skip)
@@ -122,9 +122,9 @@ const getAllCommentByShortVideoId = asyncHandler(async (req, res) => {
   const comments = await Comment.find({
     refId: shortVideoId,
     refType: "ShortVideo",
-    parentComment: null, // chỉ lấy comment gốc
+    parentComment: null, // only take original comments
   })
-    .sort({ createdAt: -1 }) // Mới nhất trước
+    .sort({ createdAt: -1 }) // Newest first
     .skip(skip)
     .limit(limit)
     .populate("postedBy", "nameChannel avatarChannel isPremium")
@@ -179,13 +179,13 @@ const getCommentRepliesByParentId = asyncHandler(async (req, res) => {
     }
   }
 
-  // Sort theo mới nhất
+  // Sort by newest
   // allReplies.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  // Sort theo cũ nhất
+  // Sort by oldest
   allReplies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
-  // Phân trang
+  // Paginate
   const pageNum = parseInt(page);
   const limit = pageNum === 1 ? 5 : 10;
   const skip = pageNum === 1 ? 0 : 5 + (pageNum - 2) * 10;
@@ -197,33 +197,6 @@ const getCommentRepliesByParentId = asyncHandler(async (req, res) => {
     hasMore: skip + limit < allReplies.length,
   });
 });
-
-//* Mô hình cây
-// const getCommentRepliesByParentId = asyncHandler(async (req, res) => {
-//   const { parentCommentId } = req.params;
-
-//   if (!parentCommentId) {
-//     return res.status(400).json({ message: "Missing parentCommentId" });
-//   }
-
-//   const getAllRepliesRecursive = async (parentId) => {
-//     const directReplies = await Comment.find({ parentComment: parentId })
-//       .sort({ createdAt: 1 })
-//       .populate("postedBy", "nameChannel avatarChannel")
-//       .lean();
-
-//     for (let reply of directReplies) {
-//       // Đệ quy lấy replies con của mỗi reply
-//       reply.replies = await getAllRepliesRecursive(reply._id);
-//     }
-
-//     return directReplies;
-//   };
-
-//   const allReplies = await getAllRepliesRecursive(parentCommentId);
-
-//   res.status(200).json({ replies: allReplies });
-// });
 
 const MAX_INDIVIDUAL_NOTIFICATIONS = 4;
 
@@ -301,7 +274,7 @@ const postComment = asyncHandler(async (req, res) => {
     "nameChannel avatarChannel"
   );
 
-  // * Tăng comment count
+  // * Increase comment count
   await refDoc.constructor.findByIdAndUpdate(refId, {
     $inc: { commentTotal: 1 },
   });
@@ -317,27 +290,27 @@ const postComment = asyncHandler(async (req, res) => {
         senderName: sender.nameChannel,
         senderAvatar: sender.avatarChannel,
         type: "comment",
-        message: `${sender.nameChannel} đã bình luận về ${refType.toLowerCase()} của bạn 💬`,
+        message: `${sender.nameChannel} commented on your ${refType.toLowerCase()} 💬`,
         detailContent: content,
         createdAt: new Date(),
       });
 
       io.to(channelId.toString()).emit(`comment-${refType.toLowerCase()}`, {
         receiverId: channelId,
-        message: `${sender.nameChannel} đã bình luận về ${refType.toLowerCase()} của bạn 💬`,
+        message: `${sender.nameChannel} commented on your ${refType.toLowerCase()} 💬`,
       });
     } else {
       await sendReplySummary({
         receiverId: channelId,
         groupId: refId,
         type: "comment_summary",
-        message: `Đã có ${commentCount} bình luận về ${refType.toLowerCase()} của bạn 💬`,
+        message: `There are ${commentCount} comments on your ${refType.toLowerCase()} 💬`,
         counter: commentCount,
       });
 
       io.to(channelId.toString()).emit(`comment-${refType.toLowerCase()}`, {
         receiverId: channelId,
-        message: `Đã có ${commentCount} bình luận về ${refType.toLowerCase()} của bạn 💬`,
+        message: `There are ${commentCount} comments on your ${refType.toLowerCase()} 💬`,
       });
     }
   }
@@ -398,20 +371,20 @@ const replyComment = asyncHandler(async (req, res) => {
       },
     });
 
-  // * Tăng tổng comment trong nội dung
+  // * Increase total comments in content
   await refDoc.constructor.findByIdAndUpdate(refId, { $inc: { commentTotal: 1 } });
 
-  // * Tăng tổng reply trong comment cha
+  // * Increase total replies in parent comment
   await Comment.findByIdAndUpdate(parentCommentId, { $inc: { replyCount: 1 } });
 
   const updatedComment = await refDoc.constructor.findById(refId);
   const totalComments = updatedComment.commentTotal;
 
   const parentOwnerId = String(parentComment.postedBy._id);
-  const infoOwnerId = String(refDoc.uploader || refDoc.author);  // xử lý cho cả Video, ShortVideo, Blog
+  const infoOwnerId = String(refDoc.uploader || refDoc.author);  // Processing for Video, ShortVideo, Blog
   const senderIdStr = userId.toString();
 
-  // * Gửi thông báo cho người viết comment gốc
+  // * Send notification to original comment writer
   if (parentOwnerId !== senderIdStr) {
     const replyCount = await Comment.countDocuments({
       parentComment: parentCommentId,
@@ -456,7 +429,7 @@ const replyComment = asyncHandler(async (req, res) => {
     }
   }
 
-  // * Gửi thông báo cho chủ sở hữu nội dung (video, short video, blog)
+  // * Send notifications to content owners (videos, short videos, blogs)
   if (infoOwnerId !== senderIdStr) {
     const existingCommentSummary = await Notification.findOne({
       receiverId: infoOwnerId,
@@ -475,27 +448,27 @@ const replyComment = asyncHandler(async (req, res) => {
         senderAvatar: sender.avatarChannel,
         type: "comment",
         groupId: refId,
-        message: `${sender.nameChannel} đã bình luận về ${refType.toLowerCase()} của bạn 💬`,
+        message: `${sender.nameChannel} commented on your ${refType.toLowerCase()} 💬`,
         detailContent: content,
         createdAt: new Date(),
       });
 
       io.to(infoOwnerId.toString()).emit(`comment-${refType.toLowerCase()}`, {
         receiverId: infoOwnerId,
-        message: `${sender.nameChannel} đã bình luận về ${refType.toLowerCase()} của bạn 💬`,
+        message: `${sender.nameChannel} commented on your ${refType.toLowerCase()} 💬`,
       });
     } else {
       await sendReplySummary({
         receiverId: infoOwnerId,
         groupId: refId,
         type: "comment_summary",
-        message: `Đã có ${totalComments} bình luận về ${refType.toLowerCase()} của bạn 💬`,
+        message: `There are ${totalComments} comments on your ${refType.toLowerCase()} 💬`,
         counter: totalComments,
       });
 
       io.to(infoOwnerId.toString()).emit(`comment-${refType.toLowerCase()}`, {
         receiverId: infoOwnerId,
-        message: `Đã có ${totalComments} bình luận về ${refType.toLowerCase()} của bạn 💬`,
+        message: `There are ${totalComments} comments on your ${refType.toLowerCase()} 💬`,
       });
     }
   }

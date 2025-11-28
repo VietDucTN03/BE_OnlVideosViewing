@@ -21,7 +21,7 @@ const getAllStatusByVideoId = asyncHandler(async (req, res) => {
     .select("_id postedBy statusLike")
     .populate({
       path: "postedBy",
-      select: "nameChannel avatarChannel", // Chỉ lấy thông tin cơ bản của người đăng
+      select: "nameChannel avatarChannel",
     })
     .lean();
 
@@ -174,7 +174,7 @@ const handleLikeNotification = async ({
     refDoc = await Comment.findById(refId).select("content");
     detailContent = `💬 ${refDoc?.content || "No content"}`;
   } else {
-    detailContent = `📌 Nội dung không xác định.`;
+    detailContent = `Content is not specified.`;
   }
 
   // const detailContent = refType === "Comment" ? refDoc?.content : refDoc?.title || "";
@@ -239,7 +239,7 @@ const handleStatusChange = async ({ refId, refType, userId, statusLike }) => {
 const interactionsStatus = asyncHandler(async (req, res) => {
   const { refId, refType, statusLike, userId } = req.body;
 
-  if (!userId) return res.status(401).json({ message: "Bạn cần đăng nhập." });
+  if (!userId) return res.status(401).json({ message: "You need to log in." });
   if (!mongoose.Types.ObjectId.isValid(refId))
     return res.status(400).json({ message: "Invalid refId" });
   if (!["Video", "ShortVideo", "Blog", "Comment"].includes(refType))

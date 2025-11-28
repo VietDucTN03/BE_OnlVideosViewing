@@ -7,13 +7,13 @@ const connectDB = async () => {
     try {
         const conn = await mongoose.connect(mongoURL);
         if (conn.connection.readyState === 1) {
-            console.log("MongoDB connection is successful ✅");
-            // console.log("Connected DB name:", mongoose.connection.name); // nên là "videosviewing"
+            console.log("MongoDB connection is successful!");
+            // console.log("Connected DB name:", mongoose.connection.name); // should be "videosviewing"
         } else {
-            console.log("MongoDB connection is failed ❌");
+            console.log("MongoDB connection is failed!");
         }
     } catch (error) {
-        console.log("Database connection is failed ❌");
+        console.log("Database connection is failed!");
         throw new Error(error);
     }
 }

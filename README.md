@@ -1,3 +1,4 @@
 ## Scripts
-- `npm start`: Chạy server ở chế độ production
-- `npm run dev`: Chạy server với nodemon (tự reload khi code thay đổi)
+- `npm start`: Run the server in production mode
+- `npm run dev`: Run server with nodemon (auto reload when code changes)
+- `docker-compose up --build`: Command to run server in Docker

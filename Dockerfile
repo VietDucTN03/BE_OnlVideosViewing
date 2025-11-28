@@ -1,18 +1,18 @@
-# Sử dụng image Node.js chính thức
+# Use the official Node.js image
 FROM node:18
 
-# Tạo thư mục làm việc
+# Create working directory
 WORKDIR /app
 
-# Sao chép package.json và cài đặt dependencies
+# Copy package.json and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Sao chép toàn bộ mã nguồn vào container
+# Copy the entire source code into the container
 COPY . .
 
-# Mở cổng 5000
+# Open port 5000
 EXPOSE 5000
 
-# Lệnh khởi chạy
+# Launch command
 CMD ["npm", "start"]

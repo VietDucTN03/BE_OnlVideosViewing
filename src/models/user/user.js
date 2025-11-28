@@ -45,7 +45,7 @@ const userSchema = new mongoose.Schema({
         ref: "Channel",
     },
 
-    // TODO: xác nhân tài khoản (email là real)
+    // TODO: Account verification (email is real)
     isVerified: {
         type: Boolean,
         default: false
@@ -53,13 +53,13 @@ const userSchema = new mongoose.Schema({
     verifyToken: String,
     verifyTokenExpire: Date,
 
-    // TODO: hỗ trợ đăng nhập / refresh token
+    // TODO: Support login / refresh token
     refreshToken: String,
 
-    // TODO: phục vụ đổi mật khẩu (khi user đổi password)
+    // TODO: password change service (when user changes password)
     passwordChangedAt: Date,
 
-    // TODO: phục vụ forgot password
+    // TODO: forgot password service
     resetPasswordToken: String,
     resetPasswordExpire: Date,
 }, {
@@ -67,13 +67,13 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre("save", async function (next) {
-    if (!this.isModified("password")) return next();  // * Nếu không thay đổi password thì sẽ bỏ qua và không thực hiện code dưới.
+    if (!this.isModified("password")) return next();  // * If you do not change the password, the code below will be ignored and not executed.
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
 });
 
-// * 👉 Method so sánh mật khẩu khi login
+// * Password comparison method when logging in
 userSchema.methods.isCorrectPassword = async function (password) {
     return await bcrypt.compare(password, this.password);
 };

@@ -15,7 +15,7 @@ const createReportReview = asyncHandler(async (req, res) => {
 
     let reportedChannelId;
 
-    // * Tìm channelId của người bị report dựa trên contentType
+    // * Find the channelId of the reported person based on contentType
     if (contentType === "Video") {
         const video = await Video.findById(contentId);
         if (!video) return res.status(404).json({ message: "Video not found." });
@@ -38,14 +38,14 @@ const createReportReview = asyncHandler(async (req, res) => {
         const hasReported = existingReport.reporters.includes(channelId);
 
         if (hasReported) {
-            return res.status(200).json({ message: "Bạn đã báo cáo nội dung này trước đó." });
+            return res.status(200).json({ message: "You have reported this content before." });
         }
 
         existingReport.reporters.push(channelId);
         await existingReport.save();
 
         return res.status(201).json({
-            message: "Báo cáo đã được thêm vào danh sách theo dõi.",
+            message: "The report has been added to the watchlist.",
             report: existingReport
         });
     }
@@ -60,7 +60,7 @@ const createReportReview = asyncHandler(async (req, res) => {
 
     await newReport.save();
 
-    // * Tăng reportReviewCount tương ứng
+    // * Increase reportReviewCount accordingly
     if (contentType === "Video") {
         await Video.findByIdAndUpdate(contentId, { $inc: { reportReviewCount: 1 } });
     } else if (contentType === "ShortVideo") {

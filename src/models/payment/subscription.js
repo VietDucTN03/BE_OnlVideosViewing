@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// ** Thông tin gói dịch vụ.
+// ** Service package information.
 
 const subscriptionSchema = new mongoose.Schema(
     {
@@ -26,7 +26,7 @@ const subscriptionSchema = new mongoose.Schema(
             enum: ['day', 'week', 'month'],
             required: true
         },
-        features: [String],   // ? Tính năng của gói.
+        features: [String],   // ? Package features.
         isActive: {
             type: Boolean,
             default: true

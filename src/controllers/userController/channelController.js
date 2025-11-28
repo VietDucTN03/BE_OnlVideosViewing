@@ -13,7 +13,7 @@ const editChannel = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Channel not found, please try again." });
   }
 
-  // * Kiểm tra nameChannel đã tồn tại chưa (ngoại trừ chính channel hiện tại)
+  // * Check if nameChannel exists (except the current channel itself)
   if (nameChannel && nameChannel !== channel.nameChannel) {
     const existingChannel = await Channel.findOne({
       nameChannel: nameChannel,
@@ -54,7 +54,7 @@ const subscribeToChannel = async (req, res) => {
       return res.status(404).json({ message: "Channel not found." });
     }
 
-    // * Khởi tạo mảng của người đăng ký nếu nó không được xác định
+    // * Initialize the subscriber array if it is not defined
     if (!channel.subscribers) {
       channel.subscribers = [];
     }
@@ -88,12 +88,12 @@ const subscribeToChannel = async (req, res) => {
         senderName,
         senderAvatar: avatarSender,
         type: "subscribe",
-        message: `${senderName} has subscribed to your channel 🎉`,
+        message: `${senderName} has subscribed to your channel.`,
         createdAt: new Date(),
       });
     }
 
-    console.log("👉 Successfully subscribed to the channel");
+    console.log("Successfully subscribed to the channel");
 
     return res.status(200).json({
       message: "Successfully subscribed to the channel.",
@@ -132,7 +132,7 @@ const unsubscribeFromChannel = async (req, res) => {
       $pull: { channelsSubscribed: channelId },
     });
 
-    console.log("👉 Successfully unsubscribed from the channel");
+    console.log("Successfully unsubscribed from the channel");
 
     return res.status(200).json({
       message: "Successfully unsubscribed from the channel.",
@@ -156,7 +156,7 @@ const getChannelByNameChannel = asyncHandler(async (req, res) => {
   res.status(200).json({ channel });
 });
 
-//* Danh sách subsribe của channel
+//* Chanel subscription list
 const getListOfChannelSubscribers = asyncHandler(async (req, res) => {
   const { channelId } = req.params;
 

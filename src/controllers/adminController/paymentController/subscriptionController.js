@@ -16,7 +16,7 @@ const getSubscriptionSummary = asyncHandler(async (req, res) => {
       { key: "inactive", value: inactivePlans, title: "Inactive Plans" },
     ]);
   } catch (error) {
-    console.error("❌ Error getting subscription summary:", error);
+    console.error("Error getting subscription summary:", error);
     res.status(500).json({
       success: false,
       message: "Failed to get subscription summary",
@@ -46,7 +46,7 @@ const getTopSubscriptions = asyncHandler(async (req, res) => {
       topSubscriptions,
     });
   } catch (error) {
-    console.error("❌ Error fetching top subscriptions:", error);
+    console.error("Error fetching top subscriptions:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch top subscriptions",
@@ -82,10 +82,10 @@ const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
   // Base query
   const baseQuery = {};
 
-  // Lấy tổng số gói ban đầu (chưa filter keyword)
+  // no filter keyword
   let totalPlans = await Subscription.countDocuments(baseQuery);
 
-  // Thêm điều kiện lọc
+  // Add filter conditions
   const query = { ...baseQuery };
 
   if (keyword) {
@@ -114,7 +114,7 @@ const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
 
     const hasMore = skip + plans.length < filteredTotal;
 
-    // Không tìm thấy khi có keyword
+    // Not found when keyword is present
     if (keyword && filteredTotal === 0) {
       return res.status(200).json({
         success: true,
@@ -131,7 +131,7 @@ const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
       });
     }
 
-    // Không có gói nào trong hệ thống
+    // There are no packages in the system.
     if (totalPlans === 0) {
       return res.status(200).json({
         success: true,
@@ -164,7 +164,7 @@ const getAllSubscriptionPlans = asyncHandler(async (req, res) => {
       periodType,
     });
   } catch (error) {
-    console.error("❌ Error fetching subscription plans:", error);
+    console.error("Error fetching subscription plans:", error);
     res.status(500).json({
       message: "Failed to fetch subscription plans",
       error: error.message,
@@ -181,25 +181,25 @@ const createSubscriptionPlan = asyncHandler(async (req, res) => {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
-    // Kiểm tra enum hợp lệ cho name
+    // Check valid enum for name
     const allowedNames = ["Basic", "Premium"];
     if (!allowedNames.includes(name)) {
       return res.status(400).json({ message: `Invalid name. Allowed: ${allowedNames.join(", ")}` });
     }
 
-    // Kiểm tra enum hợp lệ cho periodType
+    // Check valid enum for periodType
     const allowedPeriodTypes = ["day", "week", "month"];
     if (!allowedPeriodTypes.includes(periodType)) {
       return res.status(400).json({ message: `Invalid periodType. Allowed: ${allowedPeriodTypes.join(", ")}` });
     }
 
-    // Kiểm tra nếu đã tồn tại cùng name và periodType
+    // Check if same name and periodType already exist
     const existingPlan = await Subscription.findOne({ name, periodType, price });
     if (existingPlan) {
       return res.status(400).json({ message: "Subscription plan with same name, periodType and price already exists." });
     }
 
-    // Tạo mới
+    // Create new plan
     const newPlan = await Subscription.create({
       name,
       description,
@@ -217,7 +217,7 @@ const createSubscriptionPlan = asyncHandler(async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error creating subscription plan:", error);
+    console.error("Error creating subscription plan:", error);
     res.status(500).json({
       success: false,
       message: "Failed to create subscription plan",
@@ -237,7 +237,7 @@ const getSubscriptionById = asyncHandler(async (req, res) => {
       });
     }
 
-    // loại bỏ totalSubscribers khi query
+    // remove totalSubscribers when querying
     const subscription = await Subscription.findById(subscriptionId)
       .lean();
 
@@ -254,7 +254,7 @@ const getSubscriptionById = asyncHandler(async (req, res) => {
       subscription,
     });
   } catch (error) {
-    console.error("❌ Error fetching subscription by id:", error);
+    console.error("Error fetching subscription by id:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch subscription plan",
@@ -276,13 +276,13 @@ const updateSubscriptionPlan = asyncHandler(async (req, res) => {
 
     const { name, description, price, duration, periodType, features, isActive } = req.body;
 
-    // Tìm gói cần update
+    // Find the package that needs to be updated
     const plan = await Subscription.findById(subscriptionId);
     if (!plan) {
       return res.status(404).json({ message: "Subscription plan not found." });
     }
 
-    // Nếu truyền name thì validate
+    // If name is passed then validate
     if (name) {
       const allowedNames = ["Basic", "Premium"];
       if (!allowedNames.includes(name)) {
@@ -292,7 +292,7 @@ const updateSubscriptionPlan = asyncHandler(async (req, res) => {
       }
     }
 
-    // Nếu truyền periodType thì validate
+    // If periodType is passed then validate
     if (periodType) {
       const allowedPeriodTypes = ["day", "week", "month"];
       if (!allowedPeriodTypes.includes(periodType)) {
@@ -302,10 +302,10 @@ const updateSubscriptionPlan = asyncHandler(async (req, res) => {
       }
     }
 
-    // Kiểm tra trùng với gói khác (nếu có thay đổi các trường chính)
+    // Check for duplicates with other packages (if any key fields have changed)
     if (name || price || periodType) {
       const existingPlan = await Subscription.findOne({
-        _id: { $ne: subscriptionId }, // bỏ qua chính nó
+        _id: { $ne: subscriptionId }, // ignore itself
         name: name || plan.name,
         periodType: periodType || plan.periodType,
         price: price || plan.price,
@@ -317,7 +317,7 @@ const updateSubscriptionPlan = asyncHandler(async (req, res) => {
       }
     }
 
-    // Cập nhật chỉ những trường được gửi lên
+    // Update only the submitted fields
     plan.name = name ?? plan.name;
     plan.description = description ?? plan.description;
     plan.price = price ?? plan.price;
@@ -335,7 +335,7 @@ const updateSubscriptionPlan = asyncHandler(async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error updating subscription plan:", error);
+    console.error("Error updating subscription plan:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update subscription plan",
@@ -363,7 +363,7 @@ const deleteSubscriptionPlan = asyncHandler(async (req, res) => {
       });
     }
 
-    // Chỉ chặn nếu có Payment liên quan
+    // Only block if there is a Payment involved
     const relatedPayment = await Payment.findOne({
       subscriptionId: new mongoose.Types.ObjectId(subscriptionId),
     });
@@ -374,12 +374,12 @@ const deleteSubscriptionPlan = asyncHandler(async (req, res) => {
       });
     }
 
-    // (Tùy chọn) Cảnh báo nếu có user đang dùng
+    // (Optional) Warn if a user is using it
     const activeUserSub = await UserSubscription.findOne({
       subscriptionId: new mongoose.Types.ObjectId(subscriptionId),
     });
     if (activeUserSub) {
-      console.warn(`⚠ Plan ${subscriptionId} is still in use by some users.`);
+      console.warn(`Plan ${subscriptionId} is still in use by some users.`);
     }
 
     await Subscription.deleteOne({ _id: subscriptionId });
@@ -389,7 +389,7 @@ const deleteSubscriptionPlan = asyncHandler(async (req, res) => {
       message: "Subscription plan deleted successfully.",
     });
   } catch (error) {
-    console.error("❌ Error deleting subscription plan:", error);
+    console.error("Error deleting subscription plan:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete subscription plan",

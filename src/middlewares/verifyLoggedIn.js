@@ -3,7 +3,7 @@ const User = require("../models/user/user");
 
 const verifyLoggedIn = async (req, res, next) => {
   try {
-    console.log("⏩ Vào middleware verifyLoggedIn");
+    console.log("Enter the verifyLoggedIn middleware...");
 
     const token = req.cookies?.authToken;
 
@@ -21,7 +21,7 @@ const verifyLoggedIn = async (req, res, next) => {
       if (err.name === "JsonWebTokenError") {
         return res.status(401).json({ message: "Invalid token" });
       }
-      throw err; // các lỗi khác
+      throw err;
     }
 
     const user = await User.findById(decoded.id);
@@ -31,10 +31,10 @@ const verifyLoggedIn = async (req, res, next) => {
 
     req.user = user;
 
-    console.log("✅ Xác thực đăng nhập thành công, vào next()");
+    console.log("Login authentication successful, go to next() middleware...");
     next();
   } catch (error) {
-    console.error("❌ Lỗi tại middleware verifyLoggedIn:", error);
+    console.error("Error in verifyLoggedIn middleware:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

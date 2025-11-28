@@ -16,40 +16,40 @@ const checkAndUpdateContentViolationStatus = async ({ content, Model, uploaderFi
   if (Number(content.reportCount) === 1 && content.violationStatus === "normal") {
     updateContent.violationStatus = "warning";
 
-    // Gửi thông báo vi phạm cảnh báo
+    // Send warning violation notice
     await new Notification({
       receiverId: uploaderId,
       type: "warning",
-      message: `Nội dung (${Model.modelName}): ${content.title || content._id} của bạn đã vi phạm chính sách và bị cảnh báo ⚠️`,
+      message: `Your content (${Model.modelName}): ${content.title || content._id} violated the policy and was warned!`,
       detailContent: `Nội dung (${Model.modelName}): ${content.title || content._id}`,
     }).save();
 
     io.to(uploaderId.toString()).emit("warning", {
       receiverId: uploaderId,
-      message: `Nội dung (${Model.modelName}): ${content.title || content._id} của bạn đã vi phạm chính sách và bị cảnh báo ⚠️`,
+      message: `Your content (${Model.modelName}): ${content.title || content._id} violated the policy and was warned!`,
     });
 
   } else if (Number(content.reportCount) === 2 && content.violationStatus === "warning") {
     updateContent.violationStatus = "banned";
     updateContent.isBanned = true;
 
-    // Tăng reportCount trên Channel uploader
+    // Increase reportCount on Channel uploader
     await Channel.updateOne(
       { _id: uploaderId },
       { $inc: { reportCount: 1 } }
     );
 
-    // Gửi thông báo nội dung bị ban ❌
+    // Send notification of banned content
     await new Notification({
       receiverId: uploaderId,
       type: "banned",
-      message: `Nội dung (${Model.modelName}): ${content.title || content._id} đã bị gỡ khỏi hệ thống do vi phạm nghiêm trọng ❌`,
+      message: `Content (${Model.modelName}): ${content.title || content._id} has been removed from the system due to serious violations!`,
       detailContent: `Nội dung (${Model.modelName}): ${content.title || content._id}`,
     }).save();
 
     io.to(uploaderId.toString()).emit("banned", {
       receiverId: uploaderId,
-      message: `Nội dung (${Model.modelName}): ${content.title || content._id} đã bị gỡ khỏi hệ thống do vi phạm nghiêm trọng ❌`,
+      message: `Content (${Model.modelName}): ${content.title || content._id} has been removed from the system due to serious violations!`,
     });
 
     await checkAndUpdateChannelViolationStatus(uploaderId);
@@ -57,7 +57,7 @@ const checkAndUpdateContentViolationStatus = async ({ content, Model, uploaderFi
   
   console.log("content:", content);
 
-  // Cập nhật content nếu có thay đổi
+  // Update content if there are changes
   if (Object.keys(updateContent).length > 0) {
     await Model.updateOne(
       { _id: content._id },

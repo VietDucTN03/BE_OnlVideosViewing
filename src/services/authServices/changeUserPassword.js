@@ -20,7 +20,7 @@ const changeUserPassword = async ({ user, oldPassword, newPassword, isForgotMode
 
     }
 
-    user.password = newPassword;  // * Được hash bởi pre-save hook bên Models.
+    user.password = newPassword;  // * Hashed by the pre-save hook on the Models side.
     user.passwordChangedAt = Date.now();
     await user.save();
 

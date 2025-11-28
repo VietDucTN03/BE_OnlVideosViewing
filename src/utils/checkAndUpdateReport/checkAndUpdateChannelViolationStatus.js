@@ -13,22 +13,22 @@ const checkAndUpdateChannelViolationStatus = async (channelId) => {
   if (channel.reportCount === 1 && channel.violationStatus === "normal") {
     update.violationStatus = "warning";
     messageType = "warning";
-    messageText = `Kênh của bạn đã bị cảnh báo do có 1 lượt báo cáo ⚠️`;
+    messageText = `Your channel has been warned due to 1 report ⚠️`;
   } else if (channel.reportCount === 2 && channel.violationStatus === "warning") {
     update.violationStatus = "banned";
     messageType = "banned";
-    messageText = `Kênh của bạn đã bị khóa do có 2 lượt báo cáo 🚫`;
+    messageText = `Your channel has been locked due to 2 reports 🚫`;
   }
 
   if (Object.keys(update).length > 0) {
     await Channel.updateOne({ _id: channelId }, { $set: update });
 
-    // Gửi notification cho chủ kênh
+    // Send notification to channel owner
     await new Notification({
       receiverId: channel.owner,
       type: messageType,
       message: messageText,
-      detailContent: `Kênh: ${channel.nameChannel}`,
+      detailContent: `Channel: ${channel.nameChannel}`,
     }).save();
 
     io.to(channel.owner.toString()).emit(messageType, {

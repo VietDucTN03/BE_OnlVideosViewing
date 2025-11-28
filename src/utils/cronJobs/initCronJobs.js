@@ -3,7 +3,7 @@ const { checkExpiredSubscriptions } = require("../../services/subscriptionServic
 
 function initCronJobs() {
     cron.schedule("*/10 * * * *", async () => {
-        console.log("🔄 Đang kiểm tra subscription hết hạn mỗi 10 phút...");
+        console.log("🔄 Checking for subscription expiration every 10 minutes...");
         await checkExpiredSubscriptions();
     });
 };

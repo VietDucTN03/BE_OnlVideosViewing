@@ -18,7 +18,7 @@ const getShortVideoForViewing = asyncHandler(async (req, res) => {
       .select("-reportReviewCount -reportCount -violationStatus -isBanned")
       .lean();
 
-    // * Lọc các video theo 4 tiêu chí
+    // * Filter videos by 4 criteria
     const highSub = [...publicShortVideos].sort(
       (a, b) =>
         (b.uploader?.subscribersCount || 0) -
@@ -38,7 +38,7 @@ const getShortVideoForViewing = asyncHandler(async (req, res) => {
       (a, b) => (b.commentTotal || 0) - (a.commentTotal || 0)
     );
 
-    // * Chọn một số video hàng đầu từ từng tiêu chí
+    // * Select some top videos from each criteria
     const topVideos = new Set(
       [
         ...highSub.slice(0, 10),
@@ -48,12 +48,12 @@ const getShortVideoForViewing = asyncHandler(async (req, res) => {
       ].map((video) => video._id.toString())
     );
 
-    // * Lọc các video bị trùng lặp
+    // * Filter duplicate videos
     const selectedVideos = publicShortVideos.filter((video) =>
       topVideos.has(video._id.toString())
     );
 
-    // * Shuffle (ngẫu nhiên)
+    // * Shuffle
     const shuffledVideos = selectedVideos.sort(() => 0.5 - Math.random());
 
     const totalItems = shuffledVideos.length;
@@ -68,7 +68,7 @@ const getShortVideoForViewing = asyncHandler(async (req, res) => {
       hasMore,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy short video ưu tiên:", error);
+    console.error("Error when getting short video priority:", error);
     res.status(500).json({ message: "Failed to fetch short videos" });
   }
 });
@@ -82,7 +82,7 @@ const getAllShortVideosForChannel = asyncHandler(async (req, res) => {
   const skip = (pageNum - 1) * limit;
 
   if (!channelId) {
-    return res.status(400).json({ message: "Thiếu channelId." });
+    return res.status(400).json({ message: "Missing channelId." });
   }
 
   const sortOptions = {
@@ -161,7 +161,7 @@ const getAllShortVideosForChannel = asyncHandler(async (req, res) => {
       sort,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy short videos theo channelId:", error);
+    console.error("Error when getting short videos by channelId:", error);
     res
       .status(500)
       .json({
@@ -176,7 +176,7 @@ const getAllShortVideosForUser = asyncHandler(async (req, res) => {
   const { page = 1, keyword = "", sort = "createdAtDesc" } = req.query;
 
   if (!userId) {
-    return res.status(400).json({ message: "Thiếu userId." });
+    return res.status(400).json({ message: "Missing userId." });
   }
 
   const pageNum = parseInt(page, 10);
@@ -266,7 +266,7 @@ const getAllShortVideosForUser = asyncHandler(async (req, res) => {
       sort,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy short videos theo userId:", error);
+    console.error("Error when getting short videos by userId:", error);
     res
       .status(500)
       .json({
@@ -357,20 +357,20 @@ const getRandomShortVideoId = asyncHandler(async (req, res) => {
       message: "Take a successful random video short.",
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy short video ngẫu nhiên:", error);
-    res.status(500).json({ message: "Lỗi server khi lấy short video" });
+    console.error("Error when getting random short video:", error);
+    res.status(500).json({ message: "Failed to fetch random short video" });
   }
 });
 
 /**
- * Tạo chuỗi ngẫu nhiên ổn định (deterministic) từ seed
- * Giúp shuffle cố định giữa các lần phân trang.
+ * Generate a deterministic random sequence from a seed
+ * Helps to keep shuffle fixed between paging.
 */
 const deterministicShuffle = (ids, seed) => {
   return ids
     .map((id) => ({
       id,
-      // SHA‑1 cho khoá sắp xếp giả‑ngẫu‑nhiên nhưng ổn định
+      // SHA‑1 for pseudo‑random but stable key ordering
       sortKey: crypto
         .createHash("sha1")
         .update(id + seed)
@@ -390,7 +390,7 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
   } = req.query;
 
   if (!shortVideoIdByParams) {
-    return res.status(400).json({ message: "Thiếu shortVideoIdByParams" });
+    return res.status(400).json({ message: "Shortvideoidbyparams is missing." });
   }
 
   if (!mongoose.Types.ObjectId.isValid(shortVideoIdByParams)) {
@@ -510,11 +510,11 @@ const getFilteredShortVideoIds = asyncHandler(async (req, res) => {
     const appendIndex = parseInt(appendCount);
     const count = baseCount + (appendIndex + 1) * 5;
 
-    // ✅ Nếu đã lấy hết ID
+    // If all IDs have been taken
     if (count >= shuffled.length) {
       return res.status(200).json({
         success: true,
-        shortVideoIds: shuffled, // hoặc shuffled.slice(0, shuffled.length)
+        shortVideoIds: shuffled, // or shuffled.slice(0, shuffled.length)
         totalItems: deduped.length,
         isEnd: true,
         message: "The short video is over.",
@@ -563,7 +563,7 @@ const getShortVideoInfo = asyncHandler(async (req, res) => {
       shortVideo,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy thông tin short video:", error);
+    console.error("Error when getting short video information", error);
     res
       .status(500)
       .json({ message: "Failed to fetch short video information" });
@@ -631,7 +631,7 @@ const createShortVideo = asyncHandler(async (req, res, next) => {
       shortVideo,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi tạo video short:", error);
+    console.error("Error when creating short video:", error);
     next(error);
   }
 });
@@ -640,7 +640,7 @@ const updateShortVideoView = asyncHandler(async (req, res) => {
   const { shortVideoId, userId } = req.body;
 
   if (!shortVideoId || !userId) {
-    return res.status(400).json({ message: "Thiếu shortVideoId hoặc userId" });
+    return res.status(400).json({ message: "Missing shortVideoId or userId" });
   }
 
   try {
@@ -661,7 +661,7 @@ const updateShortVideoView = asyncHandler(async (req, res) => {
       }
     }
 
-    // Cập nhật hoặc tạo mới interaction: chỉ set isWatchedToEnd: true
+    // Update or create new interaction: just set isWatchedToEnd: true
     await ShortVideoInteraction.findOneAndUpdate(
       { userId, shortVideoId },
       {
@@ -671,7 +671,7 @@ const updateShortVideoView = asyncHandler(async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Tăng view short video
+    // Increase short video views
     const shortVideo = await ShortVideo.findByIdAndUpdate(
       shortVideoId,
       { $inc: { views: 1 } },
@@ -689,10 +689,10 @@ const updateShortVideoView = asyncHandler(async (req, res) => {
       views: shortVideo?.views,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi cập nhật short video view:", error);
+    console.error("Error updating short video view:", error);
     res
       .status(500)
-      .json({ message: "Lỗi server khi cập nhật short video view" });
+      .json({ message: "Server error when updating short video view" });
   }
 });
 
@@ -709,7 +709,7 @@ const editShortVideo = asyncHandler(async (req, res) => {
     }
 
     if (thumbnailUrl && thumbnailUrl !== shortVideo.thumbnail) {
-      // Xóa thumbnail cũ khỏi Cloudinary
+      // Delete old thumbnails from Cloudinary
       await deleteFromCloudinary([shortVideo.thumbnail], "image");
       shortVideo.thumbnail = thumbnailUrl;
     }
@@ -728,9 +728,9 @@ const editShortVideo = asyncHandler(async (req, res) => {
       updatedShortVideo: shortVideo,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi cập nhật short video:", error);
+    console.error("Error when updating short video:", error);
     res.status(500).json({
-      message: "Lỗi server khi cập nhật short video",
+      message: "Failed to update short video",
       error: error.message,
     });
   }
@@ -771,9 +771,9 @@ const deleteShortVideo = asyncHandler(async (req, res) => {
       shortVideo,
     });
   } catch (error) {
-    console.error("❌ Lỗi khi xóa short video:", error);
+    console.error("Error when deleting short video:", error);
     res.status(500).json({
-      message: "Lỗi server khi xóa short video",
+      message: "Failed to delete short video",
       error: error.message,
     });
   }

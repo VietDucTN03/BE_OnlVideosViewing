@@ -14,7 +14,7 @@ const commentSchema = new mongoose.Schema(
         parentComment: { 
             type: mongoose.Schema.Types.ObjectId, 
             ref: "Comment", 
-            default: null  // Nếu null thì đây là comment gốc
+            default: null  // If null then this is the original comment
         },
         content: { 
             type: String, 

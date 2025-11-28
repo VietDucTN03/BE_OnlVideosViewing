@@ -9,39 +9,39 @@ const emailAdmin = process.env.EMAIL_NAME;
 
 async function notifyPremiumUpgrade({ userId, paymentMethod, subscription, startDate, endDate, channelId }) {
     try {
-        // 1️⃣ Lấy thông tin user
+        // Get user information
         const user = await User.findById(userId);
         if (!user) return;
 
-        // 2️⃣ Gửi email thông báo
+        // Send email
         if (user.email) {
             await sendMail({
                 from: emailAdmin,
                 email: user.email,
-                subject: "Chúc mừng! Tài khoản của bạn đã nâng cấp Premium 🎉",
+                subject: "Congratulations! Your account has been upgraded to Premium!",
                 html: `
                     <div style="max-width:600px;margin:auto;font-family:sans-serif;border-radius:8px;overflow:hidden;background:#f0fdfa;">
                         <div style="background:linear-gradient(90deg,#14b8a6,#06b6d4);color:white;padding:24px;text-align:center;">
                             <h2 style="margin:0;font-size:24px;">Metube</h2>
                         </div>
                         <div style="padding:24px;">
-                            <h3 style="color:#0f172a;margin-top:0;">Xin chào ${user.username},</h3>
+                            <h3 style="color:#0f172a;margin-top:0;">Hello ${user.username},</h3>
                             <p style="color:#334155;line-height:1.6;">
-                                Bạn đã đăng ký gói <b>${subscription.name}</b> thành công.
+                                You have successfully subscribed to the <b>${subscription.name}</b> package.
                             </p>
                             <p style="color:#334155;line-height:1.6;">
-                                Phương thức thanh toán: <b>${paymentMethod}</b>.
+                                Payment method: <b>${paymentMethod}</b>.
                             </p>
                             <p style="color:#334155;line-height:1.6;">
-                                Thời hạn sử dụng: từ <b>${startDate.toLocaleDateString()}</b> đến <b>${endDate.toLocaleDateString()}</b>.
+                                Expiration date: from <b>${startDate.toLocaleDateString()}</b> to <b>${endDate.toLocaleDateString()}</b>.
                             </p>
                             <div style="text-align:center;margin:30px 0;">
                                 <a href="${urlClient}" style="background:#14b8a6;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;display:inline-block;font-size:16px;">
-                                    ✉️ Trải nghiệm ngay.
+                                    Experience now.
                                 </a>
                             </div>
                             <p style="color:#64748b;font-size:14px;">
-                                Cảm ơn bạn đã tin tưởng và sử dụng dịch vụ của chúng tôi.
+                                Thank you for trusting and using our services.
                             </p>
                         </div>
                         <div style="background:#e0f2fe;color:#334155;padding:18px;text-align:center;font-size:13px;">
@@ -52,23 +52,23 @@ async function notifyPremiumUpgrade({ userId, paymentMethod, subscription, start
             });
         }
 
-        // 3️⃣ Tạo thông báo trong hệ thống
+        // Create notification
         const notification = await Notification.create({
             receiverId: channelId,
             type: "premium",
-            message: `Tài khoản đã được nâng cấp ${subscription.name} thành công 🎉`,
-            detailContent: `Xin chào ${user.username}, chúc mừng bạn đã nâng cấp gói ${subscription.name} thành công! Hiệu lực đến ${endDate.toLocaleDateString()}, thanh toán qua ${paymentMethod}, giá ${subscription.price.toLocaleString()} VND.`,
+            message: `Account ${subscription.name} has been upgraded successfully 🎉`,
+            detailContent: `Hi ${user.username}, congratulations on successfully upgrading your ${subscription.name} package! Valid until ${endDate.toLocaleDateString()}, paid via ${paymentMethod}, price ${subscription.price.toLocaleString()} VND.`,
             createdAt: new Date(),
         });
 
-        // 4️⃣ Gửi thông báo real-time qua socket
+        // Send real-time notifications via socket
         io.to(userId.toString()).emit("premium", {
             receiverId: channelId,
             message: notification.message,
         });
 
     } catch (error) {
-        console.error("Lỗi khi gửi thông báo premium:", error);
+        console.error("Error notifying premium upgrade:", error);
     }
 }
 

@@ -223,21 +223,17 @@ const getReportsByShortVideoId = asyncHandler(async (req, res) => {
   const limit = 5;
   const skip = (pageNum - 1) * limit;
 
-  // Tạo điều kiện truy vấn
   const query = {
     contentId: shortVideoId,
     contentType: "ShortVideo",
   };
 
-  // Lọc theo trạng thái xử lý
   if (["valid", "invalid", "pending"].includes(resolvedResult)) {
     query.resolvedResult = resolvedResult;
   }
 
-  // Đếm tổng số report thỏa điều kiện
   const totalReports = await ReportReview.countDocuments(query);
 
-  // Lấy danh sách report phân trang
   const reports = await ReportReview.find(query)
     .populate("reporters", "nameChannel avatarChannel")
     // .populate("reportedChannel", "nameChannel avatarChannel")
@@ -304,13 +300,13 @@ const deleteShortVideoById = asyncHandler(async (req, res) => {
   await deleteFromCloudinary([short.url], "video");
   await deleteFromCloudinary([short.thumbnail], "image");
 
-  // Gỡ video khỏi tất cả playlist chứa nó
+  // Remove the video from all playlists containing it
   // await Playlist.updateMany(
   //   { "videos.video": short._id },
   //   { $pull: { videos: { video: short._id } } }
   // );
 
-  // Cập nhật Channel: xoá video khỏi danh sách và giảm videoTotal
+  // Update Channel: remove video from list and reduce videoTotal
   //   await Channel.updateOne(
   //     { _id: short.uploader },
   //     {

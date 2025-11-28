@@ -24,7 +24,7 @@ const videoSchema = new mongoose.Schema(
             required: true
         },
         category: {
-            type: [String], // Danh mục video (mảng)
+            type: [String],
             required: true
         },
         views: {

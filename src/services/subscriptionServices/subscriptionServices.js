@@ -10,7 +10,7 @@ const updateUserSubscription = require("../../utils/payment/updateUserSubscripti
 const getSubscriptionPlans = asyncHandler(async (req, res) => {
   try {
     const plans = await Subscription.find({ isActive: true })
-      .sort({ price: 1 }); // sắp xếp từ giá thấp -> cao
+      .sort({ price: 1 }); // sort from low price -> high price
 
     res.json(plans);
   } catch (error) {
@@ -23,7 +23,7 @@ const getUserSubscriptionOfUser = asyncHandler(async (req, res) => {
   const { page = 1, status = "all", sort = "createdAtDesc" } = req.query;
 
   if (!userId) {
-    return res.status(400).json({ message: "Thiếu userId." });
+    return res.status(400).json({ message: "Missing userId." });
   }
 
   const pageNum = parseInt(page, 10);
@@ -42,7 +42,7 @@ const getUserSubscriptionOfUser = asyncHandler(async (req, res) => {
   // Base query
   const query = { userId };
 
-  // ✅ Filter theo status, bỏ qua nếu là "all" hoặc rỗng
+  // Filter by status
   if (status && status !== "all") {
     query.status = status;
   }
@@ -89,7 +89,7 @@ const getUserSubscriptionOfUser = asyncHandler(async (req, res) => {
       sort
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy subscription theo userId:", error);
+    console.error("Error when getting subscription by userId:", error);
     res.status(500).json({
       message: "Failed to fetch user subscriptions",
       error: error.message
@@ -104,12 +104,12 @@ const getDetailsOfUserSubscription = asyncHandler(async (req, res) => {
   if (!userId || !userSubscriptionId) {
     return res.status(400).json({
       success: false,
-      message: "Thiếu userId hoặc userSubscriptionId."
+      message: "Missing userId or userSubscriptionId."
     });
   }
 
   try {
-    // ✅ Chạy song song lấy subscription + channel
+    // Run parallel to get subscription + channel
     const [userSub, channel] = await Promise.all([
       UserSubscription.findOne({ _id: userSubscriptionId, userId })
         .populate("userId", "username email")
@@ -124,34 +124,34 @@ const getDetailsOfUserSubscription = asyncHandler(async (req, res) => {
     if (!userSub) {
       return res.status(404).json({
         success: false,
-        message: "Không tìm thấy subscription hoặc không có quyền truy cập."
+        message: "No subscription found or no access."
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Lấy chi tiết subscription thành công.",
+      message: "Get subscription details successfully.",
       subscription: userSub,
       channel: channel || null
     });
   } catch (error) {
-    console.error("❌ Lỗi khi lấy chi tiết userSubscription:", error);
+    console.error("Error while getting userSubscription details:", error);
     return res.status(500).json({
       success: false,
-      message: "Lỗi server khi lấy chi tiết userSubscription.",
+      message: "Server error while retrieving userSubscription details.",
       error: error.message
     });
   }
 });
 
-const checkExpiredSubscriptions = async () => {
+const checkExpiredSubscriptions = async (res = null) => {
   try {
     const now = new Date();
 
     const expiredSubs = await UserSubscription.find({
       status: "active",
       endDate: { $lte: now }  // * less than or equal (endDate <= now)
-    });
+    }).populate("subscriptionId", "name");
 
     if (expiredSubs.length === 0) return;
 
@@ -164,17 +164,29 @@ const checkExpiredSubscriptions = async () => {
         { isPremium: false },
         { new: true }
       );
+
+      await updateUserSubscription({
+        userId: sub.userId,
+        subscriptionName: sub.subscriptionId?.name || "Premium",
+        endDate: sub.endDate,
+        type: "expired"
+      });
     }
 
-    res.cookie("showExpiredModal", "true", {
-      httpOnly: false,
-      maxAge: 1000 * 60,
-      sameSite: "strict",
-    });
+    if (res) {
+      res.cookie("showExpiredModal", "true", {
+        httpOnly: false,
+        maxAge: 1000 * 60, // 1 minute
+        sameSite: "strict",
+      });
+      console.log("The showExpiredModal cookie has been set for the client.");
+    } else {
+      console.log("No client, skip cookie set.");
+    }
 
-    console.log(`✅ Đã cập nhật ${expiredSubs.length} subscription hết hạn.`);
+    console.log(`Updated ${expiredSubs.length} subscription expiration.`);
   } catch (error) {
-    console.error("❌ Lỗi khi check expired subscriptions:", error);
+    console.error("Error when checking expired subscriptions:", error);
   }
 };
 
@@ -183,7 +195,7 @@ const cancelUserSubscription = asyncHandler(async (req, res) => {
   const { userSubscriptionId } = req.params;
 
   if (!userId || !userSubscriptionId) {
-    return res.status(400).json({ message: "Thiếu userId hoặc userSubscriptionId." });
+    return res.status(400).json({ message: "Missing userId or userSubscriptionId" });
   }
 
   try {
@@ -195,14 +207,14 @@ const cancelUserSubscription = asyncHandler(async (req, res) => {
     if (!userSub) {
       return res.status(404).json({
         success: false,
-        message: "Không tìm thấy subscription."
+        message: "No subscription found."
       });
     }
 
     if (userSub.status !== "active") {
       return res.status(400).json({
         success: false,
-        message: "Subscription không ở trạng thái active, không thể hủy."
+        message: "Subscription is not active and cannot be canceled."
       });
     }
 
@@ -225,14 +237,14 @@ const cancelUserSubscription = asyncHandler(async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Subscription đã được hủy thành công.",
+      message: "Subscription has been canceled successfully.",
       subscription: userSub
     });
   } catch (error) {
-    console.error("❌ Lỗi khi hủy subscription:", error);
+    console.error("Error when canceling subscription:", error);
     res.status(500).json({
       success: false,
-      message: "Lỗi khi hủy subscription",
+      message: "Error canceling subscription",
       error: error.message
     });
   }
